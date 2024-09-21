@@ -15,18 +15,22 @@ from PyPDF2 import PdfReader, PdfWriter
 def clean_filename(name):
     return re.sub(r'[<>:"/\\|?*]', '', name)
 
-# Function to extract FNSKU from each page of the PDF
+# Function to extract FNSKU from a specific region of the page
 def extract_fnsku_from_page(pdf_page):
-    # Use pdfplumber to extract text
+    # Open the PDF with pdfplumber
     with pdfplumber.open(pdf_page) as pdf:
         first_page = pdf.pages[0]
-        text = first_page.extract_text()
-        # Assuming the FNSKU is at a fixed position or matches a specific pattern
+        
+        # Define a bounding box where the FNSKU is located (adjust these values as necessary)
+        bbox = (100, 150, 400, 200)  # Adjust coordinates based on where the FNSKU is located on the page
+        text = first_page.within_bbox(bbox).extract_text()
+        
         fnsku = None
-        for line in text.split("\n"):
-            if "FNSKU" in line:
-                fnsku = line.strip()
-                break
+        if text:
+            for line in text.split("\n"):
+                if re.match(r"^[A-Z0-9]{10}$", line):  # Assuming FNSKU is 10 alphanumeric characters
+                    fnsku = line.strip()
+                    break
     return fnsku if fnsku else "unknown_fnsku"
 
 # Function to split a PDF into multiple PDFs, one per page, using FNSKU as the file name
@@ -44,7 +48,7 @@ def split_fnsku_pdf(uploaded_pdf):
         writer = PdfWriter()
         writer.add_page(input_pdf.pages[page_num])
 
-        # Extract FNSKU from the page (you can adjust this according to how it's extracted)
+        # Extract FNSKU from the page (adjust according to actual PDF content)
         fnsku = extract_fnsku_from_page(uploaded_pdf)  # Extract FNSKU from the page
 
         # Clean the FNSKU for use as a filename
