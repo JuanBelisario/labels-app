@@ -2,3 +2,4 @@ streamlit
 reportlab
 python-barcode
 pandas
+openpyxl
