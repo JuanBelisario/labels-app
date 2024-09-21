@@ -1,6 +1,3 @@
-# Instalar las dependencias necesarias
-!pip install reportlab python-barcode pandas streamlit > /dev/null 2>&1
-
 import streamlit as st
 import pandas as pd
 import os
