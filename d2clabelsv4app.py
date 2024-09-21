@@ -8,6 +8,7 @@ from barcode import EAN13
 from barcode.writer import ImageWriter
 from datetime import datetime
 from zipfile import ZipFile
+from PyPDF2 import PdfReader, PdfWriter
 
 # Function to clean up file names
 def clean_filename(name):
@@ -65,9 +66,11 @@ def generate_pdfs_from_excel(df):
     first_sku = df.iloc[0]['SKU']
     current_date = datetime.now().strftime("%Y%m%d")
 
-    # Create a temporary folder to save the PDFs
     output_folder = f"{first_sku}_{current_date}"
     os.makedirs(output_folder, exist_ok=True)
+
+    total_rows = len(df)
+    progress_bar = st.progress(0)  # Add progress bar
 
     for index, row in df.iterrows():
         sku = row['SKU']
@@ -76,6 +79,9 @@ def generate_pdfs_from_excel(df):
         pdf_filename = clean_filename(f"{sku}.pdf")
         pdf_path = os.path.join(output_folder, pdf_filename)
         generate_label_pdf(sku, upc_code, lot_num, pdf_path)
+
+        # Update the progress bar
+        progress_bar.progress((index + 1) / total_rows)
 
     # Compress all PDFs into a ZIP file
     zip_filename = f"{output_folder}.zip"
@@ -87,18 +93,67 @@ def generate_pdfs_from_excel(df):
 
     return zip_filename
 
+# Function to split a PDF into multiple PDFs, one per page
+def split_fnsku_pdf(uploaded_pdf):
+    input_pdf = PdfReader(uploaded_pdf)
+    total_pages = len(input_pdf.pages)
+
+    # Create an output folder
+    output_folder = f"Split_FNSKU_{datetime.now().strftime('%Y%m%d')}"
+    os.makedirs(output_folder, exist_ok=True)
+
+    progress_bar = st.progress(0)  # Add progress bar for splitting PDF
+
+    for page_num in range(total_pages):
+        writer = PdfWriter()
+        writer.add_page(input_pdf.pages[page_num])
+
+        # Save each page as a separate PDF
+        output_filename = os.path.join(output_folder, f"page_{page_num + 1}.pdf")
+        with open(output_filename, 'wb') as output_pdf:
+            writer.write(output_pdf)
+
+        # Update the progress bar
+        progress_bar.progress((page_num + 1) / total_pages)
+
+    # Compress the split PDFs into a ZIP file
+    zip_filename = f"{output_folder}.zip"
+    with ZipFile(zip_filename, 'w') as zipObj:
+        for folder_name, subfolders, filenames in os.walk(output_folder):
+            for filename in filenames:
+                filepath = os.path.join(folder_name, filename)
+                zipObj.write(filepath, os.path.basename(filepath))
+
+    return zip_filename
+
 # Streamlit interface
-st.title("UPC Label Generator")
+st.title("Label Tools")
 
-st.write("Upload an Excel file with SKU, UPC, and LOT# (if applicable)")
+# Add option for either generating labels or splitting PDF
+option = st.selectbox("Choose an action", ["Generate Labels", "Split FNSKU Labels"])
 
-# Upload the Excel file
-uploaded_file = st.file_uploader("Upload Excel file", type=["xlsx"])
+if option == "Generate Labels":
+    st.write("Upload an Excel file with SKU, UPC, and LOT# (if applicable)")
 
-if uploaded_file is not None:
-    df = pd.read_excel(uploaded_file)
-    
-    if st.button("Generate Labels"):
-        zip_path = generate_pdfs_from_excel(df)
-        with open(zip_path, "rb") as f:
-            st.download_button("Download ZIP file with Labels", f, file_name=zip_path)
+    # Upload the Excel file
+    uploaded_file = st.file_uploader("Upload Excel file", type=["xlsx"])
+
+    if uploaded_file is not None:
+        df = pd.read_excel(uploaded_file)
+        
+        if st.button("Generate Labels"):
+            zip_path = generate_pdfs_from_excel(df)
+            with open(zip_path, "rb") as f:
+                st.download_button("Download ZIP file with Labels", f, file_name=zip_path)
+
+elif option == "Split FNSKU Labels":
+    st.write("Upload a PDF file to split FNSKU labels")
+
+    # Upload the PDF file
+    uploaded_pdf = st.file_uploader("Upload PDF file", type=["pdf"])
+
+    if uploaded_pdf is not None:
+        if st.button("Split PDF"):
+            zip_path = split_fnsku_pdf(uploaded_pdf)
+            with open(zip_path, "rb") as f:
+                st.download_button("Download ZIP file with Split PDFs", f, file_name=zip_path)
