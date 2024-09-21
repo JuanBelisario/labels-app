@@ -3,3 +3,4 @@ reportlab
 python-barcode
 pandas
 openpyxl
+PyPDF2
