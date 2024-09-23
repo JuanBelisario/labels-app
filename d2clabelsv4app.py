@@ -10,12 +10,13 @@ from barcode.writer import ImageWriter
 from datetime import datetime
 from zipfile import ZipFile
 from PyPDF2 import PdfReader, PdfWriter
+import pdfplumber
 
 # Function to clean up file names
 def clean_filename(name):
     return re.sub(r'[<>:"/\\|?*]', '', name)
 
-# Function to generate UPC labels in PDF format
+# Function to generate UPC labels in PDF format (this part works correctly)
 def generate_label_pdf(sku, upc_code, lot_num, output_path):
     width, height = 60 * mm, 35 * mm
     c = canvas.Canvas(output_path, pagesize=(width, height))
@@ -62,9 +63,8 @@ def generate_label_pdf(sku, upc_code, lot_num, output_path):
 
     c.save()
 
-# Function to generate PDFs and compress them into a ZIP file
+# Function to generate PDFs and compress them into a ZIP file (works correctly)
 def generate_pdfs_from_excel(df):
-    # Check if the required columns are present
     required_columns = ['SKU', 'UPC Code', 'LOT#']
     missing_columns = [col for col in required_columns if col not in df.columns]
     if missing_columns:
@@ -78,7 +78,7 @@ def generate_pdfs_from_excel(df):
     os.makedirs(output_folder, exist_ok=True)
 
     total_rows = len(df)
-    progress_bar = st.progress(0)  # Add progress bar
+    progress_bar = st.progress(0)
 
     for index, row in df.iterrows():
         sku = row['SKU']
@@ -88,10 +88,57 @@ def generate_pdfs_from_excel(df):
         pdf_path = os.path.join(output_folder, pdf_filename)
         generate_label_pdf(sku, upc_code, lot_num, pdf_path)
 
-        # Update the progress bar
         progress_bar.progress((index + 1) / total_rows)
 
-    # Compress all PDFs into a ZIP file
+    zip_filename = f"{output_folder}.zip"
+    with ZipFile(zip_filename, 'w') as zipObj:
+        for folder_name, subfolders, filenames in os.walk(output_folder):
+            for filename in filenames:
+                filepath = os.path.join(folder_name, filename)
+                zipObj.write(filepath, os.path.basename(filepath))
+
+    return zip_filename
+
+# Function to extract FNSKU from a specific region of the page using pdfplumber
+def extract_fnsku_from_page(page):
+    bbox = (59.46, 43.07, 102.71600000000002, 51.07)  # Coordinates based on your input
+    text = page.within_bbox(bbox).extract_text()
+    
+    fnsku = None
+    if text:
+        for line in text.split("\n"):
+            if re.match(r"^[A-Z0-9]{10}$", line):  # Assuming FNSKU is 10 alphanumeric characters
+                fnsku = line.strip()
+                break
+    return fnsku if fnsku else "unknown_fnsku"
+
+# Function to split a PDF into multiple PDFs, one per page, using FNSKU as the file name
+def split_fnsku_pdf(uploaded_pdf):
+    pdf_file = BytesIO(uploaded_pdf.read())  # Convert uploaded file to BytesIO
+    input_pdf = PdfReader(pdf_file)
+    total_pages = len(input_pdf.pages)
+
+    output_folder = f"Split_FNSKU_{datetime.now().strftime('%Y%m%d')}"
+    os.makedirs(output_folder, exist_ok=True)
+
+    progress_bar = st.progress(0)
+
+    for page_num in range(total_pages):
+        writer = PdfWriter()
+        writer.add_page(input_pdf.pages[page_num])
+
+        pdf_file.seek(0)  # Reset the file pointer for each page to work with pdfplumber
+        with pdfplumber.open(BytesIO(uploaded_pdf.read())) as pdf:
+            page = pdf.pages[page_num]
+            fnsku = extract_fnsku_from_page(page)  # Extract FNSKU from the page
+
+        fnsku_clean = clean_filename(fnsku)
+        output_filename = os.path.join(output_folder, f"{fnsku_clean}_page_{page_num + 1}.pdf")
+        with open(output_filename, 'wb') as output_pdf:
+            writer.write(output_pdf)
+
+        progress_bar.progress((page_num + 1) / total_pages)
+
     zip_filename = f"{output_folder}.zip"
     with ZipFile(zip_filename, 'w') as zipObj:
         for folder_name, subfolders, filenames in os.walk(output_folder):
@@ -104,20 +151,15 @@ def generate_pdfs_from_excel(df):
 # Streamlit interface
 st.title("Label Tools")
 
-# Add option for either generating labels or splitting PDF
 option = st.selectbox("Choose an action", ["Generate Labels", "Split FNSKU Labels"])
 
 if option == "Generate Labels":
     st.write("Upload an Excel file with SKU, UPC, and LOT# (if applicable)")
-
-    # Upload the Excel file
     uploaded_file = st.file_uploader("Upload Excel file", type=["xlsx"])
 
     if uploaded_file is not None:
         try:
-            # Load the Excel file using pandas
             df = pd.read_excel(uploaded_file)
-
             if st.button("Generate Labels"):
                 zip_path = generate_pdfs_from_excel(df)
                 if zip_path:
@@ -128,12 +170,11 @@ if option == "Generate Labels":
 
 elif option == "Split FNSKU Labels":
     st.write("Upload a PDF file to split FNSKU labels")
-
-    # Upload the PDF file
     uploaded_pdf = st.file_uploader("Upload PDF file", type=["pdf"])
 
     if uploaded_pdf is not None:
         if st.button("Split PDF"):
             zip_path = split_fnsku_pdf(uploaded_pdf)
-            with open(zip_path, "rb") as f:
-                st.download_button("Download ZIP file with Split PDFs", f, file_name=zip_path)
+            if zip_path:
+                with open(zip_path, "rb") as f:
+                    st.download_button("Download ZIP file with Split PDFs", f, file_name=zip_path)
