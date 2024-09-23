@@ -133,11 +133,13 @@ def split_fnsku_pdf(uploaded_pdf):
             page = pdf.pages[page_num]
             page_text = extract_text_from_page(page)  # Extract text from the page
 
-            # Clean and set the text as the file name
-            clean_filename_text = clean_filename(page_text)
-            output_filename = os.path.join(output_folder, f"{clean_filename_text}_page_{page_num + 1}.pdf")
-            with open(output_filename, 'wb') as output_pdf:
-                writer.write(output_pdf)
+            # Skip "unknown" named pages and only save files with a valid name
+            if page_text != "unknown":
+                # Clean and set the text as the file name
+                clean_filename_text = clean_filename(page_text)
+                output_filename = os.path.join(output_folder, f"{clean_filename_text}_page_{page_num + 1}.pdf")
+                with open(output_filename, 'wb') as output_pdf:
+                    writer.write(output_pdf)
 
             progress_bar.progress((page_num + 1) / total_pages)
 
