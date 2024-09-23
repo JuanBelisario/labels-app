@@ -103,11 +103,10 @@ def generate_pdfs_from_excel(df):
 def extract_text_from_page(page):
     text = page.extract_text()
     if text:
-        # Replace spaces and special characters with underscores
-        clean_text = re.sub(r'[^\w\s]', '', text)
-        clean_text = "_".join(clean_text.split())
-        # Consider a valid label to have at least one meaningful word or code like FNSKU
-        if len(clean_text) > 10:  # Ensure it's not an empty/invalid extraction
+        # Clean up the extracted text
+        clean_text = re.sub(r'[^\w\s]', '', text)  # Remove special characters
+        clean_text = "_".join(clean_text.split())  # Replace spaces with underscores
+        if len(clean_text) > 5:  # Only return valid text with more than 5 characters
             return clean_text
     return None
 
@@ -135,8 +134,8 @@ def split_fnsku_pdf(uploaded_pdf):
             page = pdf.pages[page_num]
             page_text = extract_text_from_page(page)  # Extract text from the page
 
-            # Only save files with a valid name
-            if page_text:  # Check if the text is valid (not None)
+            # Only save files with valid text
+            if page_text:  # Skip pages with no valid text
                 # Clean and set the text as the file name
                 clean_filename_text = clean_filename(page_text)
                 output_filename = os.path.join(output_folder, f"{clean_filename_text}_page_{page_num + 1}.pdf")
@@ -145,13 +144,15 @@ def split_fnsku_pdf(uploaded_pdf):
 
             progress_bar.progress((page_num + 1) / total_pages)
 
-    # Compress the split PDFs into a ZIP file
+    # Compress the split PDFs into a ZIP file, skipping any "unknown" pages
     zip_filename = f"{output_folder}.zip"
     with ZipFile(zip_filename, 'w') as zipObj:
         for folder_name, subfolders, filenames in os.walk(output_folder):
             for filename in filenames:
-                filepath = os.path.join(folder_name, filename)
-                zipObj.write(filepath, os.path.basename(filepath))
+                # Skip files that are named "unknown"
+                if "unknown" not in filename:
+                    filepath = os.path.join(folder_name, filename)
+                    zipObj.write(filepath, os.path.basename(filepath))
 
     return zip_filename
 
