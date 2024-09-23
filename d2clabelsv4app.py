@@ -28,7 +28,7 @@ def generate_label_pdf(sku, upc_code, lot_num, output_path):
     barcode_width = 51.5 * mm
 
     c.setFont("Helvetica", 9.5)
-    c.drawCentredString(width / 2, y_sku)
+    c.drawCentredString(width / 2, y_sku, sku)
 
     if len(upc_code) == 12:
         upc_code = '0' + upc_code
@@ -114,7 +114,7 @@ def extract_fnsku_from_page(page):
 
 # Function to split a PDF into multiple PDFs, one per page, using FNSKU as the file name
 def split_fnsku_pdf(uploaded_pdf):
-    # Read the PDF once from the uploaded file and reset its pointer
+    # Reset the file pointer and read the PDF once
     pdf_file = BytesIO(uploaded_pdf.read())  # Convert uploaded file to BytesIO
     input_pdf = PdfReader(pdf_file)
     total_pages = len(input_pdf.pages)
@@ -125,18 +125,18 @@ def split_fnsku_pdf(uploaded_pdf):
 
     progress_bar = st.progress(0)
 
+    # Reset the pdf_file pointer again to use with pdfplumber
+    pdf_file.seek(0)
+    
     # Use pdfplumber to extract text from the entire PDF, only opening it once
-    pdf_file.seek(0)  # Reset file pointer for pdfplumber
     with pdfplumber.open(pdf_file) as pdf:
         for page_num in range(total_pages):
             writer = PdfWriter()
             writer.add_page(input_pdf.pages[page_num])
 
-            # Extract FNSKU from each page using pdfplumber
             page = pdf.pages[page_num]
             fnsku = extract_fnsku_from_page(page)  # Extract FNSKU from the page
 
-            # Clean and set the FNSKU as the file name
             fnsku_clean = clean_filename(fnsku)
             output_filename = os.path.join(output_folder, f"{fnsku_clean}_page_{page_num + 1}.pdf")
             with open(output_filename, 'wb') as output_pdf:
