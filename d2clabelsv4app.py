@@ -125,18 +125,18 @@ def split_fnsku_pdf(uploaded_pdf):
 
     progress_bar = st.progress(0)
 
-    # Reset the pdf_file pointer again to use with pdfplumber
-    pdf_file.seek(0)
-    
     # Use pdfplumber to extract text from the entire PDF, only opening it once
+    pdf_file.seek(0)  # Reset file pointer for pdfplumber
     with pdfplumber.open(pdf_file) as pdf:
         for page_num in range(total_pages):
             writer = PdfWriter()
             writer.add_page(input_pdf.pages[page_num])
 
+            # Extract FNSKU from each page using pdfplumber
             page = pdf.pages[page_num]
             fnsku = extract_fnsku_from_page(page)  # Extract FNSKU from the page
 
+            # Clean and set the FNSKU as the file name
             fnsku_clean = clean_filename(fnsku)
             output_filename = os.path.join(output_folder, f"{fnsku_clean}_page_{page_num + 1}.pdf")
             with open(output_filename, 'wb') as output_pdf:
