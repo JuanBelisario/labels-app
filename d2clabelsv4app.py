@@ -134,7 +134,7 @@ def split_fnsku_pdf(uploaded_pdf):
             page_text = extract_text_from_page(page)  # Extract text from the page
 
             # Skip "unknown" named pages and only save files with a valid name
-            if page_text != "unknown":
+            if page_text != "unknown":  # Check if the text is not "unknown"
                 # Clean and set the text as the file name
                 clean_filename_text = clean_filename(page_text)
                 output_filename = os.path.join(output_folder, f"{clean_filename_text}_page_{page_num + 1}.pdf")
