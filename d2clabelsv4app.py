@@ -129,7 +129,7 @@ def split_fnsku_pdf(uploaded_pdf):
     pdf_file.seek(0)
     
     # Use pdfplumber to extract text from the entire PDF, only opening it once
-    with pdfplumber.open(pdf_file) as pdf:
+    with pdfplumber.open(BytesIO(uploaded_pdf.read())) as pdf:
         for page_num in range(total_pages):
             writer = PdfWriter()
             writer.add_page(input_pdf.pages[page_num])
