@@ -106,8 +106,10 @@ def extract_text_from_page(page):
         # Replace spaces and special characters with underscores
         clean_text = re.sub(r'[^\w\s]', '', text)
         clean_text = "_".join(clean_text.split())
-        return clean_text
-    return "unknown"
+        # Consider a valid label to have at least one meaningful word or code like FNSKU
+        if len(clean_text) > 10:  # Ensure it's not an empty/invalid extraction
+            return clean_text
+    return None
 
 # Function to split a PDF into multiple PDFs, one per page, using all text as the file name
 def split_fnsku_pdf(uploaded_pdf):
@@ -133,8 +135,8 @@ def split_fnsku_pdf(uploaded_pdf):
             page = pdf.pages[page_num]
             page_text = extract_text_from_page(page)  # Extract text from the page
 
-            # Skip "unknown" named pages and only save files with a valid name
-            if page_text != "unknown":  # Check if the text is not "unknown"
+            # Only save files with a valid name
+            if page_text:  # Check if the text is valid (not None)
                 # Clean and set the text as the file name
                 clean_filename_text = clean_filename(page_text)
                 output_filename = os.path.join(output_folder, f"{clean_filename_text}_page_{page_num + 1}.pdf")
