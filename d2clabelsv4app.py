@@ -5,8 +5,7 @@ import re
 from io import BytesIO
 from reportlab.lib.pagesizes import mm
 from reportlab.pdfgen import canvas
-from barcode.codex import Code128
-from barcode.writer import ImageWriter
+from reportlab.graphics.barcode import code128  # Importando Code128 desde reportlab
 from datetime import datetime
 from zipfile import ZipFile
 from PyPDF2 import PdfReader, PdfWriter
@@ -33,23 +32,8 @@ def generate_label_pdf(sku, upc_code, lot_num, output_path):
     if len(upc_code) == 12:
         upc_code = '0' + upc_code
 
-    barcode_filename = clean_filename(f"{sku}_barcode")
-    barcode_path = f"{barcode_filename}.png"
-
-    options = {
-        'module_width': 0.35,
-        'module_height': 16,
-        'font_size': 7.75,
-        'text_distance': 4.5,
-        'quiet_zone': 1.25,
-        'dpi': 600
-    }
-
-    barcode_ean = EAN13(upc_code, writer=ImageWriter())
-    barcode_ean.save(barcode_filename, options)
-
-    c.drawImage(barcode_path, (width - barcode_width) / 2, y_barcode, width=barcode_width, height=16 * mm)
-    os.remove(barcode_path)
+    barcode = code128.Code128(upc_code, barHeight=16 * mm, humanReadable=True)  # Usando Code128 desde reportlab
+    barcode.drawOn(c, (width - barcode_width) / 2, y_barcode)
 
     c.setFont("Helvetica", 9)
     if lot_num:
@@ -77,23 +61,8 @@ def generate_fnsku_label_pdf(sku, fnsku_code, lot_num, output_path):
     c.setFont("Helvetica", 9.5)
     c.drawCentredString(width / 2, y_sku, sku)
 
-    barcode_filename = clean_filename(f"{sku}_barcode")
-    barcode_path = f"{barcode_filename}.png"
-
-    options = {
-        'module_width': 0.35,
-        'module_height': 16,
-        'font_size': 7.75,
-        'text_distance': 4.5,
-        'quiet_zone': 1.25,
-        'dpi': 600
-    }
-
-    barcode_fnsku = Code128(fnsku_code, writer=ImageWriter())
-    barcode_fnsku.save(barcode_filename, options)
-
-    c.drawImage(barcode_path, (width - barcode_width) / 2, y_barcode, width=barcode_width, height=16 * mm)
-    os.remove(barcode_path)
+    barcode = code128.Code128(fnsku_code, barHeight=16 * mm, humanReadable=True)  # Usando Code128 desde reportlab
+    barcode.drawOn(c, (width - barcode_width) / 2, y_barcode)
 
     c.setFont("Helvetica", 9)
     if lot_num:
