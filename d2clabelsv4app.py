@@ -9,8 +9,6 @@ from barcode import EAN13, Code128
 from barcode.writer import ImageWriter
 from datetime import datetime
 from zipfile import ZipFile
-from PyPDF2 import PdfReader, PdfWriter
-import pdfplumber
 import textwrap
 
 # Función para generar el archivo Excel de plantilla para D2C Labels
@@ -65,8 +63,11 @@ def generate_fnsku_barcode(fnsku, sku):
         'dpi': 600
     })
     barcode_filename = f"{sku}_barcode"
-    fnsku_barcode.save(barcode_filename)
-    return f"{barcode_filename}.png"
+    # Generar el archivo PNG temporal en memoria
+    temp_barcode_image = BytesIO()
+    fnsku_barcode.write(temp_barcode_image)
+    temp_barcode_image.seek(0)
+    return temp_barcode_image
 
 # Función para manejar el texto largo del nombre del producto en la etiqueta FNSKU
 def wrap_text_to_two_lines(text, max_length, c, start_x, start_y, line_height, max_width):
@@ -88,19 +89,20 @@ def wrap_text_to_two_lines(text, max_length, c, start_x, start_y, line_height, m
 def create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder):
     pdf_filename = os.path.join(output_folder, f"{sku}_fnsku_label.pdf")
     c = canvas.Canvas(pdf_filename, pagesize=(60 * mm, 35 * mm))
+
+    # Guardar el PNG temporal en el PDF directamente desde el stream
+    barcode_image.seek(0)
     c.drawImage(barcode_image, 4.5 * mm, 10 * mm, width=51.5 * mm, height=16 * mm)
+
     font_size = 9
     c.setFont("Helvetica", font_size)
     if product_name:
         wrap_text_to_two_lines(product_name, max_length=23, c=c, start_x=5 * mm, start_y=7.75 * mm, line_height=font_size + 2, max_width=38)
     if lot:
         c.drawString(5 * mm, 3.5 * mm, f"Lot: {lot}")
+    
     c.showPage()
     c.save()
-
-    # Eliminar el archivo PNG temporal después de usarlo
-    if os.path.exists(barcode_image):
-        os.remove(barcode_image)
 
 # Función para generar PDFs y comprimirlos en un archivo ZIP (FNSKU)
 def generate_fnsku_labels_from_excel(df):
@@ -117,11 +119,11 @@ def generate_fnsku_labels_from_excel(df):
         fnsku = str(row['FNSKU']) if pd.notna(row['FNSKU']) else ''
         product_name = str(row['Product Name']) if pd.notna(row['Product Name']) else ''
         lot = str(row['LOT#']) if pd.notna(row['LOT#']) else ''
-        
-        # Generar el código de barras FNSKU temporalmente
+
+        # Generar el código de barras FNSKU temporalmente en memoria
         barcode_image = generate_fnsku_barcode(fnsku, sku)
 
-        # Crear el PDF con la etiqueta FNSKU y eliminar el PNG después
+        # Crear el PDF con la etiqueta FNSKU sin guardar el PNG
         create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder)
 
         progress_bar.progress((index + 1) / total_rows)
