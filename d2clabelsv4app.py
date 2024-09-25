@@ -9,8 +9,9 @@ from barcode import EAN13, Code128
 from barcode.writer import ImageWriter
 from datetime import datetime
 from zipfile import ZipFile
+from PyPDF2 import PdfReader, PdfWriter
+import pdfplumber
 import textwrap
-import tempfile
 
 # Función para generar el archivo Excel de plantilla para D2C Labels
 def generate_d2c_template():
@@ -53,7 +54,7 @@ def clean_filename(name):
     return re.sub(r'[<>:"/\\|?*]', '', name)
 
 # Función para generar código de barras FNSKU como imagen temporal
-def generate_fnsku_barcode(fnsku, sku, temp_dir):
+def generate_fnsku_barcode(fnsku, sku):
     fnsku_barcode = Code128(fnsku, writer=ImageWriter())
     fnsku_barcode.writer.set_options({
         'module_width': 0.35,
@@ -63,10 +64,9 @@ def generate_fnsku_barcode(fnsku, sku, temp_dir):
         'quiet_zone': 1.25,
         'dpi': 600
     })
-    # Guardar el archivo PNG en el directorio temporal
-    barcode_filename = os.path.join(temp_dir, f"{sku}_barcode.png")
+    barcode_filename = f"{sku}_barcode"
     fnsku_barcode.save(barcode_filename)
-    return barcode_filename
+    return f"{barcode_filename}.png"
 
 # Función para manejar el texto largo del nombre del producto en la etiqueta FNSKU
 def wrap_text_to_two_lines(text, max_length, c, start_x, start_y, line_height, max_width):
@@ -88,17 +88,13 @@ def wrap_text_to_two_lines(text, max_length, c, start_x, start_y, line_height, m
 def create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder):
     pdf_filename = os.path.join(output_folder, f"{sku}_fnsku_label.pdf")
     c = canvas.Canvas(pdf_filename, pagesize=(60 * mm, 35 * mm))
-
-    # Insertar la imagen del código de barras en el PDF
     c.drawImage(barcode_image, 4.5 * mm, 10 * mm, width=51.5 * mm, height=16 * mm)
-
     font_size = 9
     c.setFont("Helvetica", font_size)
     if product_name:
         wrap_text_to_two_lines(product_name, max_length=23, c=c, start_x=5 * mm, start_y=7.75 * mm, line_height=font_size + 2, max_width=38)
     if lot:
         c.drawString(5 * mm, 3.5 * mm, f"Lot: {lot}")
-    
     c.showPage()
     c.save()
 
@@ -112,37 +108,29 @@ def generate_fnsku_labels_from_excel(df):
     total_rows = len(df)
     progress_bar = st.progress(0)
 
-    # Crear un directorio temporal para los archivos PNG
-    with tempfile.TemporaryDirectory() as temp_dir:
-        png_files = []  # Lista para almacenar los archivos PNG
+    for index, row in df.iterrows():
+        sku = str(row['SKU']) if pd.notna(row['SKU']) else ''
+        fnsku = str(row['FNSKU']) if pd.notna(row['FNSKU']) else ''
+        product_name = str(row['Product Name']) if pd.notna(row['Product Name']) else ''
+        lot = str(row['LOT#']) if pd.notna(row['LOT#']) else ''
+        
+        # Generar el código de barras FNSKU temporalmente
+        barcode_image = generate_fnsku_barcode(fnsku, sku)
 
-        for index, row in df.iterrows():
-            sku = str(row['SKU']) if pd.notna(row['SKU']) else ''
-            fnsku = str(row['FNSKU']) if pd.notna(row['FNSKU']) else ''
-            product_name = str(row['Product Name']) if pd.notna(row['Product Name']) else ''
-            lot = str(row['LOT#']) if pd.notna(row['LOT#']) else ''
+        # Crear el PDF con la etiqueta FNSKU
+        create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder)
 
-            # Generar el código de barras FNSKU en el directorio temporal
-            barcode_image = generate_fnsku_barcode(fnsku, sku, temp_dir)
-            png_files.append(barcode_image)  # Agregar el archivo PNG a la lista
+        progress_bar.progress((index + 1) / total_rows)
 
-            # Crear el PDF con la etiqueta FNSKU
-            create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder)
-
-            progress_bar.progress((index + 1) / total_rows)
-
-        # Comprimir los PDFs generados en un archivo ZIP
-        zip_filename = f"{output_folder}.zip"
-        with ZipFile(zip_filename, 'w') as zipObj:
-            for folder_name, subfolders, filenames in os.walk(output_folder):
-                for filename in filenames:
+    # Comprimir solo los PDFs generados en un archivo ZIP, ignorando los PNG
+    zip_filename = f"{output_folder}.zip"
+    with ZipFile(zip_filename, 'w') as zipObj:
+        for folder_name, subfolders, filenames in os.walk(output_folder):
+            for filename in filenames:
+                # Ignorar archivos PNG, incluir solo PDFs en el ZIP
+                if filename.endswith(".pdf"):
                     filepath = os.path.join(folder_name, filename)
                     zipObj.write(filepath, os.path.basename(filepath))
-
-        # Eliminar los archivos PNG después de generar el ZIP
-        for png_file in png_files:
-            if os.path.exists(png_file):
-                os.remove(png_file)
 
     return zip_filename
 
@@ -213,19 +201,19 @@ def generate_pdfs_from_excel(df, label_type="D2C"):
             fnsku = str(row['FNSKU']) if pd.notna(row['FNSKU']) else ''
             product_name = str(row['Product Name']) if pd.notna(row['Product Name']) else ''
             lot_num = str(row['LOT#']) if pd.notna(row['LOT#']) else ""
-            # Crear un directorio temporal para guardar el PNG temporal
-            with tempfile.TemporaryDirectory() as temp_dir:
-                barcode_image = generate_fnsku_barcode(fnsku, sku, temp_dir)
-                create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot_num, output_folder)
+            barcode_image = generate_fnsku_barcode(fnsku, sku)
+            create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot_num, output_folder)
 
         progress_bar.progress((index + 1) / total_rows)
 
     zip_filename = f"{output_folder}.zip"
     with ZipFile(zip_filename, 'w') as zipObj:
         for folder_name, subfolders, filenames in os.walk(output_folder):
+            # Solo agregar archivos PDF al ZIP
             for filename in filenames:
-                filepath = os.path.join(folder_name, filename)
-                zipObj.write(filepath, os.path.basename(filepath))
+                if filename.endswith(".pdf"):
+                    filepath = os.path.join(folder_name, filename)
+                    zipObj.write(filepath, os.path.basename(filepath))
 
     return zip_filename
 
