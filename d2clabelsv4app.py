@@ -10,7 +10,7 @@ from barcode.writer import ImageWriter
 from datetime import datetime
 from zipfile import ZipFile
 import textwrap
-import tempfile  # Para manejo de archivos temporales
+import tempfile
 
 # Función para generar el archivo Excel de plantilla para D2C Labels
 def generate_d2c_template():
@@ -109,10 +109,12 @@ def generate_fnsku_labels_from_excel(df):
     output_folder = f"{first_fnsku}_{current_date}"
     os.makedirs(output_folder, exist_ok=True)
 
+    total_rows = len(df)
+    progress_bar = st.progress(0)
+
     # Crear un directorio temporal para los archivos PNG
     with tempfile.TemporaryDirectory() as temp_dir:
-        total_rows = len(df)
-        progress_bar = st.progress(0)
+        png_files = []  # Lista para almacenar los archivos PNG
 
         for index, row in df.iterrows():
             sku = str(row['SKU']) if pd.notna(row['SKU']) else ''
@@ -122,6 +124,7 @@ def generate_fnsku_labels_from_excel(df):
 
             # Generar el código de barras FNSKU en el directorio temporal
             barcode_image = generate_fnsku_barcode(fnsku, sku, temp_dir)
+            png_files.append(barcode_image)  # Agregar el archivo PNG a la lista
 
             # Crear el PDF con la etiqueta FNSKU
             create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder)
@@ -135,6 +138,11 @@ def generate_fnsku_labels_from_excel(df):
                 for filename in filenames:
                     filepath = os.path.join(folder_name, filename)
                     zipObj.write(filepath, os.path.basename(filepath))
+
+        # Eliminar los archivos PNG después de generar el ZIP
+        for png_file in png_files:
+            if os.path.exists(png_file):
+                os.remove(png_file)
 
     return zip_filename
 
@@ -162,7 +170,7 @@ def generate_label_pdf(sku, upc_code, lot_num, output_path):
         'dpi': 600
     }
     barcode_ean = EAN13(upc_code, writer=ImageWriter())
-    barcode_ean.save(barcode_filename, options)
+    barcode_ean.save(barcode_path, options)
     c.drawImage(barcode_path, (width - barcode_width) / 2, y_barcode, width=barcode_width, height=16 * mm)
     os.remove(barcode_path)
     c.setFont("Helvetica", 9)
