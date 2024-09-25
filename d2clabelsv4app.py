@@ -62,12 +62,10 @@ def generate_fnsku_barcode(fnsku, sku):
         'quiet_zone': 1.25,
         'dpi': 600
     })
-    barcode_filename = f"{sku}_barcode"
-    # Generar el archivo PNG temporal en memoria
-    temp_barcode_image = BytesIO()
-    fnsku_barcode.write(temp_barcode_image)
-    temp_barcode_image.seek(0)
-    return temp_barcode_image
+    # Generar el archivo PNG temporal
+    barcode_filename = f"{sku}_barcode.png"
+    fnsku_barcode.save(barcode_filename)
+    return barcode_filename
 
 # Función para manejar el texto largo del nombre del producto en la etiqueta FNSKU
 def wrap_text_to_two_lines(text, max_length, c, start_x, start_y, line_height, max_width):
@@ -90,8 +88,7 @@ def create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder
     pdf_filename = os.path.join(output_folder, f"{sku}_fnsku_label.pdf")
     c = canvas.Canvas(pdf_filename, pagesize=(60 * mm, 35 * mm))
 
-    # Guardar el PNG temporal en el PDF directamente desde el stream
-    barcode_image.seek(0)
+    # Insertar la imagen del código de barras en el PDF
     c.drawImage(barcode_image, 4.5 * mm, 10 * mm, width=51.5 * mm, height=16 * mm)
 
     font_size = 9
@@ -103,6 +100,10 @@ def create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder
     
     c.showPage()
     c.save()
+
+    # Eliminar el archivo PNG después de usarlo
+    if os.path.exists(barcode_image):
+        os.remove(barcode_image)
 
 # Función para generar PDFs y comprimirlos en un archivo ZIP (FNSKU)
 def generate_fnsku_labels_from_excel(df):
@@ -120,10 +121,10 @@ def generate_fnsku_labels_from_excel(df):
         product_name = str(row['Product Name']) if pd.notna(row['Product Name']) else ''
         lot = str(row['LOT#']) if pd.notna(row['LOT#']) else ''
 
-        # Generar el código de barras FNSKU temporalmente en memoria
+        # Generar el código de barras FNSKU temporalmente
         barcode_image = generate_fnsku_barcode(fnsku, sku)
 
-        # Crear el PDF con la etiqueta FNSKU sin guardar el PNG
+        # Crear el PDF con la etiqueta FNSKU y eliminar el PNG después
         create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder)
 
         progress_bar.progress((index + 1) / total_rows)
