@@ -13,11 +13,59 @@ from PyPDF2 import PdfReader, PdfWriter
 import pdfplumber
 import textwrap
 
-# Function to clean up file names
+# Función para generar el archivo Excel de plantilla para D2C Labels
+def generate_d2c_template():
+    # Crear un DataFrame vacío con los encabezados correctos
+    df = pd.DataFrame(columns=['SKU', 'UPC Code', 'LOT#'])
+    
+    # Guardar el DataFrame como un archivo Excel en memoria
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='D2C Template')
+    
+    output.seek(0)
+    return output
+
+# Función para generar el archivo Excel de plantilla para FNSKU Labels
+def generate_fnsku_template():
+    # Crear un DataFrame vacío con los encabezados correctos
+    df = pd.DataFrame(columns=['SKU', 'FNSKU', 'Product Name', 'LOT#'])
+    
+    # Guardar el DataFrame como un archivo Excel en memoria
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='FNSKU Template')
+    
+    output.seek(0)
+    return output
+
+# Función para mostrar los botones de descarga de plantillas en Streamlit
+def show_template_download_buttons():
+    st.write("Download Templates for D2C Labels and FNSKU Labels:")
+
+    # Botón para descargar el template D2C Labels
+    d2c_template = generate_d2c_template()
+    st.download_button(
+        label="Download D2C Template",
+        data=d2c_template,
+        file_name="d2c_labels_template.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+    # Botón para descargar el template FNSKU Labels
+    fnsku_template = generate_fnsku_template()
+    st.download_button(
+        label="Download FNSKU Template",
+        data=fnsku_template,
+        file_name="fnsku_labels_template.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+# Función para limpiar nombres de archivos
 def clean_filename(name):
     return re.sub(r'[<>:"/\\|?*]', '', name)
 
-# Function to generate FNSKU barcode (new feature)
+# Función para generar código de barras FNSKU
 def generate_fnsku_barcode(fnsku, sku, output_folder):
     fnsku_barcode = Code128(fnsku, writer=ImageWriter())
     fnsku_barcode.writer.set_options({
@@ -32,7 +80,7 @@ def generate_fnsku_barcode(fnsku, sku, output_folder):
     fnsku_barcode.save(barcode_filename)
     return f"{barcode_filename}.png"
 
-# Function to handle long product name text for FNSKU labels
+# Función para manejar el texto largo del nombre del producto en la etiqueta FNSKU
 def wrap_text_to_two_lines(text, max_length, c, start_x, start_y, line_height, max_width):
     if len(text) > 2 * max_length:
         text_to_display = text[:max_length] + '...' + text[-max_length:]
@@ -47,29 +95,29 @@ def wrap_text_to_two_lines(text, max_length, c, start_x, start_y, line_height, m
     for i, line in enumerate(lines):
         c.drawString(start_x, start_y - i * line_height, line)
 
-# Function to generate FNSKU PDF label (new feature)
+# Función para generar etiqueta FNSKU en PDF
 def create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder):
     pdf_filename = os.path.join(output_folder, f"{sku}_fnsku_label.pdf")
     c = canvas.Canvas(pdf_filename, pagesize=(59 * mm, 28.09 * mm))
     
-    # Drawing the barcode image
+    # Dibujar el código de barras en el PDF
     c.drawImage(barcode_image, 4 * mm, 10.5 * mm, width=52 * mm, height=15 * mm)
     
     font_size = 7
-    c.setFont("Arial", font_size)
+    c.setFont("Helvetica", font_size)
 
-    # Handle product name (2 lines max)
+    # Ajustar el nombre del producto (2 líneas máximo)
     if product_name:
         wrap_text_to_two_lines(product_name, max_length=23, c=c, start_x=5 * mm, start_y=7.5 * mm, line_height=font_size + 2, max_width=38)
     
-    # Add lot number if available
+    # Añadir número de lote si está disponible
     if lot:
         c.drawString(5 * mm, 3 * mm, f"Lot: {lot}")
     
     c.showPage()
     c.save()
 
-# Function to generate D2C labels with UPC (existing feature)
+# Función para generar etiquetas D2C en PDF con UPC
 def generate_label_pdf(sku, upc_code, lot_num, output_path):
     width, height = 60 * mm, 35 * mm
     c = canvas.Canvas(output_path, pagesize=(width, height))
@@ -116,9 +164,9 @@ def generate_label_pdf(sku, upc_code, lot_num, output_path):
 
     c.save()
 
-# Function to generate PDFs and compress them into a ZIP file (D2C and FNSKU)
+# Función para generar PDFs y comprimirlos en un archivo ZIP
 def generate_pdfs_from_excel(df, label_type="D2C"):
-    required_columns = ['SKU', 'UPC Code', 'LOT#'] if label_type == "D2C" else ['SKU', 'FNSKU', 'LOT#']
+    required_columns = ['SKU', 'UPC Code', 'LOT#'] if label_type == "D2C" else ['SKU', 'FNSKU', 'Product Name', 'LOT#']
     missing_columns = [col for col in required_columns if col not in df.columns]
     if missing_columns:
         st.error(f"Missing columns in the Excel file: {', '.join(missing_columns)}")
@@ -159,43 +207,37 @@ def generate_pdfs_from_excel(df, label_type="D2C"):
 
     return zip_filename
 
-# Function to extract all text from a page using pdfplumber
+# Función para extraer texto de una página usando pdfplumber
 def extract_text_from_page(page):
     text = page.extract_text()
     if text:
-        # Clean up the extracted text
-        clean_text = re.sub(r'[^\w\s]', '', text)  # Remove special characters
-        clean_text = "_".join(clean_text.split())  # Replace spaces with underscores
-        if len(clean_text) > 5:  # Only return valid text with more than 5 characters
+        clean_text = re.sub(r'[^\w\s]', '', text)  # Remover caracteres especiales
+        clean_text = "_".join(clean_text.split())  # Reemplazar espacios por guiones bajos
+        if len(clean_text) > 5:
             return clean_text
     return None
 
-# Function to split a PDF into multiple PDFs, one per page, using all text as the file name
+# Función para dividir un PDF en varios PDFs, una página por archivo
 def split_fnsku_pdf(uploaded_pdf):
-    # Reset the file pointer and read the PDF once
-    pdf_file = BytesIO(uploaded_pdf.read())  # Convert uploaded file to BytesIO
+    pdf_file = BytesIO(uploaded_pdf.read())  # Convertir el archivo subido a BytesIO
     input_pdf = PdfReader(pdf_file)
     total_pages = len(input_pdf.pages)
 
-    # Create an output folder
     output_folder = f"Split_FNSKU_{datetime.now().strftime('%Y%m%d')}"
     os.makedirs(output_folder, exist_ok=True)
 
     progress_bar = st.progress(0)
 
-    # Use pdfplumber to extract text from the entire PDF, only opening it once
-    pdf_file.seek(0)  # Reset file pointer for pdfplumber
+    pdf_file.seek(0)  # Resetear el puntero para pdfplumber
     with pdfplumber.open(pdf_file) as pdf:
         for page_num in range(total_pages):
             writer = PdfWriter()
             writer.add_page(input_pdf.pages[page_num])
 
-            # Extract all text from each page
             page = pdf.pages[page_num]
-            page_text = extract_text_from_page(page)  # Extract text from the page
+            page_text = extract_text_from_page(page)  # Extraer el texto de la página
 
-            # Only save files with valid text
-            if page_text:  # Skip pages with no valid text
+            if page_text:  # Saltar páginas sin texto válido
                 clean_filename_text = clean_filename(page_text)
                 output_filename = os.path.join(output_folder, f"{clean_filename_text}_page_{page_num + 1}.pdf")
                 with open(output_filename, 'wb') as output_pdf:
@@ -207,18 +249,22 @@ def split_fnsku_pdf(uploaded_pdf):
     with ZipFile(zip_filename, 'w') as zipObj:
         for folder_name, subfolders, filenames in os.walk(output_folder):
             for filename in filenames:
-                # Skip files that are named "unknown"
                 if "unknown" not in filename:
                     filepath = os.path.join(folder_name, filename)
                     zipObj.write(filepath, os.path.basename(filepath))
 
     return zip_filename
 
-# Streamlit interface
+# Streamlit UI
 st.title("Label Tools")
 
+# Mostrar los botones de descarga de plantillas
+show_template_download_buttons()
+
+# Opciones en el menú de la app
 option = st.selectbox("Choose an action", ["Generate D2C Labels", "Generate FNSKU Labels", "Split FNSKU PDFs"], key="action_select")
 
+# Opción: Generate D2C Labels
 if option == "Generate D2C Labels":
     st.write("Upload an Excel file with SKU, UPC, and LOT# (if applicable)")
     uploaded_file = st.file_uploader("Upload Excel file", type=["xlsx"], key="excel_uploader")
@@ -234,6 +280,7 @@ if option == "Generate D2C Labels":
         except Exception as e:
             st.error(f"Error reading the Excel file: {e}")
 
+# Opción: Generate FNSKU Labels
 elif option == "Generate FNSKU Labels":
     st.write("Upload an Excel file with SKU, FNSKU, and LOT# (if applicable)")
     uploaded_file = st.file_uploader("Upload Excel file", type=["xlsx"], key="excel_fnsku_uploader")
@@ -249,6 +296,7 @@ elif option == "Generate FNSKU Labels":
         except Exception as e:
             st.error(f"Error reading the Excel file: {e}")
 
+# Opción: Split FNSKU PDFs
 elif option == "Split FNSKU PDFs":
     st.write("Upload a PDF file to split FNSKU labels")
     uploaded_pdf = st.file_uploader("Upload PDF file", type=["pdf"], key="pdf_uploader")
