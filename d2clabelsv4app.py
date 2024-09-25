@@ -98,6 +98,10 @@ def create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder
     c.showPage()
     c.save()
 
+    # Eliminar el archivo PNG temporal después de usarlo
+    if os.path.exists(barcode_image):
+        os.remove(barcode_image)
+
 # Función para generar PDFs y comprimirlos en un archivo ZIP (FNSKU)
 def generate_fnsku_labels_from_excel(df):
     first_fnsku = df.iloc[0]['FNSKU']
@@ -117,20 +121,18 @@ def generate_fnsku_labels_from_excel(df):
         # Generar el código de barras FNSKU temporalmente
         barcode_image = generate_fnsku_barcode(fnsku, sku)
 
-        # Crear el PDF con la etiqueta FNSKU
+        # Crear el PDF con la etiqueta FNSKU y eliminar el PNG después
         create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder)
 
         progress_bar.progress((index + 1) / total_rows)
 
-    # Comprimir solo los PDFs generados en un archivo ZIP, ignorando los PNG
+    # Comprimir los PDFs generados en un archivo ZIP
     zip_filename = f"{output_folder}.zip"
     with ZipFile(zip_filename, 'w') as zipObj:
         for folder_name, subfolders, filenames in os.walk(output_folder):
             for filename in filenames:
-                # Ignorar archivos PNG, incluir solo PDFs en el ZIP
-                if filename.endswith(".pdf"):
-                    filepath = os.path.join(folder_name, filename)
-                    zipObj.write(filepath, os.path.basename(filepath))
+                filepath = os.path.join(folder_name, filename)
+                zipObj.write(filepath, os.path.basename(filepath))
 
     return zip_filename
 
@@ -158,7 +160,7 @@ def generate_label_pdf(sku, upc_code, lot_num, output_path):
         'dpi': 600
     }
     barcode_ean = EAN13(upc_code, writer=ImageWriter())
-    barcode_ean.save(barcode_path, options)
+    barcode_ean.save(barcode_filename, options)
     c.drawImage(barcode_path, (width - barcode_width) / 2, y_barcode, width=barcode_width, height=16 * mm)
     os.remove(barcode_path)
     c.setFont("Helvetica", 9)
@@ -209,11 +211,9 @@ def generate_pdfs_from_excel(df, label_type="D2C"):
     zip_filename = f"{output_folder}.zip"
     with ZipFile(zip_filename, 'w') as zipObj:
         for folder_name, subfolders, filenames in os.walk(output_folder):
-            # Solo agregar archivos PDF al ZIP
             for filename in filenames:
-                if filename.endswith(".pdf"):
-                    filepath = os.path.join(folder_name, filename)
-                    zipObj.write(filepath, os.path.basename(filepath))
+                filepath = os.path.join(folder_name, filename)
+                zipObj.write(filepath, os.path.basename(filepath))
 
     return zip_filename
 
