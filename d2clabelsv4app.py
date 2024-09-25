@@ -97,6 +97,8 @@ def create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder
         c.drawString(5 * mm, 3.5 * mm, f"Lot: {lot}")
     c.showPage()
     c.save()
+
+    # Eliminar el archivo PNG temporal después de usarlo
     if os.path.exists(barcode_image):
         os.remove(barcode_image)
 
@@ -116,10 +118,15 @@ def generate_fnsku_labels_from_excel(df):
         product_name = str(row['Product Name']) if pd.notna(row['Product Name']) else ''
         lot = str(row['LOT#']) if pd.notna(row['LOT#']) else ''
         
+        # Generar el código de barras FNSKU temporalmente
         barcode_image = generate_fnsku_barcode(fnsku, sku)
+
+        # Crear el PDF con la etiqueta FNSKU y eliminar el PNG después
         create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder)
+
         progress_bar.progress((index + 1) / total_rows)
 
+    # Comprimir los PDFs generados en un archivo ZIP
     zip_filename = f"{output_folder}.zip"
     with ZipFile(zip_filename, 'w') as zipObj:
         for folder_name, subfolders, filenames in os.walk(output_folder):
