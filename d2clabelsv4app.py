@@ -10,6 +10,7 @@ from barcode.writer import ImageWriter
 from datetime import datetime
 from zipfile import ZipFile
 import textwrap
+import tempfile  # Para manejo de archivos temporales
 
 # Función para generar el archivo Excel de plantilla para D2C Labels
 def generate_d2c_template():
@@ -52,7 +53,7 @@ def clean_filename(name):
     return re.sub(r'[<>:"/\\|?*]', '', name)
 
 # Función para generar código de barras FNSKU como imagen temporal
-def generate_fnsku_barcode(fnsku, sku):
+def generate_fnsku_barcode(fnsku, sku, temp_dir):
     fnsku_barcode = Code128(fnsku, writer=ImageWriter())
     fnsku_barcode.writer.set_options({
         'module_width': 0.35,
@@ -62,8 +63,8 @@ def generate_fnsku_barcode(fnsku, sku):
         'quiet_zone': 1.25,
         'dpi': 600
     })
-    # Generar el archivo PNG temporal
-    barcode_filename = f"{sku}_barcode.png"
+    # Guardar el archivo PNG en el directorio temporal
+    barcode_filename = os.path.join(temp_dir, f"{sku}_barcode.png")
     fnsku_barcode.save(barcode_filename)
     return barcode_filename
 
@@ -101,10 +102,6 @@ def create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder
     c.showPage()
     c.save()
 
-    # Eliminar el archivo PNG después de usarlo
-    if os.path.exists(barcode_image):
-        os.remove(barcode_image)
-
 # Función para generar PDFs y comprimirlos en un archivo ZIP (FNSKU)
 def generate_fnsku_labels_from_excel(df):
     first_fnsku = df.iloc[0]['FNSKU']
@@ -112,30 +109,32 @@ def generate_fnsku_labels_from_excel(df):
     output_folder = f"{first_fnsku}_{current_date}"
     os.makedirs(output_folder, exist_ok=True)
 
-    total_rows = len(df)
-    progress_bar = st.progress(0)
+    # Crear un directorio temporal para los archivos PNG
+    with tempfile.TemporaryDirectory() as temp_dir:
+        total_rows = len(df)
+        progress_bar = st.progress(0)
 
-    for index, row in df.iterrows():
-        sku = str(row['SKU']) if pd.notna(row['SKU']) else ''
-        fnsku = str(row['FNSKU']) if pd.notna(row['FNSKU']) else ''
-        product_name = str(row['Product Name']) if pd.notna(row['Product Name']) else ''
-        lot = str(row['LOT#']) if pd.notna(row['LOT#']) else ''
+        for index, row in df.iterrows():
+            sku = str(row['SKU']) if pd.notna(row['SKU']) else ''
+            fnsku = str(row['FNSKU']) if pd.notna(row['FNSKU']) else ''
+            product_name = str(row['Product Name']) if pd.notna(row['Product Name']) else ''
+            lot = str(row['LOT#']) if pd.notna(row['LOT#']) else ''
 
-        # Generar el código de barras FNSKU temporalmente
-        barcode_image = generate_fnsku_barcode(fnsku, sku)
+            # Generar el código de barras FNSKU en el directorio temporal
+            barcode_image = generate_fnsku_barcode(fnsku, sku, temp_dir)
 
-        # Crear el PDF con la etiqueta FNSKU y eliminar el PNG después
-        create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder)
+            # Crear el PDF con la etiqueta FNSKU
+            create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder)
 
-        progress_bar.progress((index + 1) / total_rows)
+            progress_bar.progress((index + 1) / total_rows)
 
-    # Comprimir los PDFs generados en un archivo ZIP
-    zip_filename = f"{output_folder}.zip"
-    with ZipFile(zip_filename, 'w') as zipObj:
-        for folder_name, subfolders, filenames in os.walk(output_folder):
-            for filename in filenames:
-                filepath = os.path.join(folder_name, filename)
-                zipObj.write(filepath, os.path.basename(filepath))
+        # Comprimir los PDFs generados en un archivo ZIP
+        zip_filename = f"{output_folder}.zip"
+        with ZipFile(zip_filename, 'w') as zipObj:
+            for folder_name, subfolders, filenames in os.walk(output_folder):
+                for filename in filenames:
+                    filepath = os.path.join(folder_name, filename)
+                    zipObj.write(filepath, os.path.basename(filepath))
 
     return zip_filename
 
@@ -206,8 +205,10 @@ def generate_pdfs_from_excel(df, label_type="D2C"):
             fnsku = str(row['FNSKU']) if pd.notna(row['FNSKU']) else ''
             product_name = str(row['Product Name']) if pd.notna(row['Product Name']) else ''
             lot_num = str(row['LOT#']) if pd.notna(row['LOT#']) else ""
-            barcode_image = generate_fnsku_barcode(fnsku, sku)
-            create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot_num, output_folder)
+            # Crear un directorio temporal para guardar el PNG temporal
+            with tempfile.TemporaryDirectory() as temp_dir:
+                barcode_image = generate_fnsku_barcode(fnsku, sku, temp_dir)
+                create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot_num, output_folder)
 
         progress_bar.progress((index + 1) / total_rows)
 
