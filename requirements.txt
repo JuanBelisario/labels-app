@@ -6,4 +6,3 @@ openpyxl
 PyPDF2
 pdfplumber
 xlsxwriter
-shutil
