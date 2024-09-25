@@ -5,7 +5,7 @@ import re
 from io import BytesIO
 from reportlab.lib.pagesizes import mm
 from reportlab.pdfgen import canvas
-from barcode.codex import Code128, ImageWriter
+from barcode.codex import Code128,
 from barcode.writer import ImageWriter
 from datetime import datetime
 from zipfile import ZipFile
