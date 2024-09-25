@@ -67,6 +67,7 @@ def clean_filename(name):
 
 # Función para generar código de barras FNSKU
 def generate_fnsku_barcode(fnsku, sku, output_folder):
+    fnsku = str(fnsku) if pd.notna(fnsku) else ""  # Asegurarnos de que FNSKU sea una cadena y no NaN
     fnsku_barcode = Code128(fnsku, writer=ImageWriter())
     fnsku_barcode.writer.set_options({
         'module_width': 0.35,
@@ -82,6 +83,7 @@ def generate_fnsku_barcode(fnsku, sku, output_folder):
 
 # Función para manejar el texto largo del nombre del producto en la etiqueta FNSKU
 def wrap_text_to_two_lines(text, max_length, c, start_x, start_y, line_height, max_width):
+    text = str(text) if pd.notna(text) else ""  # Asegurarnos de que text sea una cadena y no NaN
     if len(text) > 2 * max_length:
         text_to_display = text[:max_length] + '...' + text[-max_length:]
     else:
@@ -100,7 +102,12 @@ def create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder
     pdf_filename = os.path.join(output_folder, f"{sku}_fnsku_label.pdf")
     c = canvas.Canvas(pdf_filename, pagesize=(59 * mm, 28.09 * mm))
     
-    # Dibujar el código de barras en el PDF
+    # Asegurarnos de que los valores no sean NaN
+    fnsku = str(fnsku) if pd.notna(fnsku) else ""
+    product_name = str(product_name) if pd.notna(product_name) else ""
+    lot = str(lot) if pd.notna(lot) else ""
+
+    # Ajustar la imagen del código de barras
     c.drawImage(barcode_image, 4 * mm, 10.5 * mm, width=52 * mm, height=15 * mm)
     
     font_size = 7
@@ -182,17 +189,17 @@ def generate_pdfs_from_excel(df, label_type="D2C"):
     progress_bar = st.progress(0)
 
     for index, row in df.iterrows():
-        sku = row['SKU']
+        sku = str(row['SKU']) if pd.notna(row['SKU']) else ''
         if label_type == "D2C":
             upc_code = str(row['UPC Code']).zfill(12)
-            lot_num = row['LOT#'] if pd.notnull(row['LOT#']) else ""
+            lot_num = str(row['LOT#']) if pd.notna(row['LOT#']) else ""
             pdf_filename = clean_filename(f"{sku}.pdf")
             pdf_path = os.path.join(output_folder, pdf_filename)
             generate_label_pdf(sku, upc_code, lot_num, pdf_path)
         elif label_type == "FNSKU":
-            fnsku = str(row['FNSKU'])
-            product_name = row['Product Name'] if 'Product Name' in row else ""
-            lot_num = row['LOT#'] if pd.notnull(row['LOT#']) else ""
+            fnsku = str(row['FNSKU']) if pd.notna(row['FNSKU']) else ''
+            product_name = str(row['Product Name']) if pd.notna(row['Product Name']) else ''
+            lot_num = str(row['LOT#']) if pd.notna(row['LOT#']) else ""
             barcode_image = generate_fnsku_barcode(fnsku, sku, output_folder)
             create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot_num, output_folder)
 
