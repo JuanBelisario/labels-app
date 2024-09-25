@@ -5,8 +5,7 @@ import re
 from io import BytesIO
 from reportlab.lib.pagesizes import mm
 from reportlab.pdfgen import canvas
-from barcode import EAN13
-from barcode.writer import ImageWriter
+from barcode import Code128, ImageWriter
 from datetime import datetime
 from zipfile import ZipFile
 from PyPDF2 import PdfReader, PdfWriter
@@ -16,7 +15,7 @@ import pdfplumber
 def clean_filename(name):
     return re.sub(r'[<>:"/\\|?*]', '', name)
 
-# Function to generate UPC labels in PDF format (Excel upload)
+# Function to generate UPC labels in PDF format (Excel upload for D2C)
 def generate_label_pdf(sku, upc_code, lot_num, output_path):
     width, height = 60 * mm, 35 * mm
     c = canvas.Canvas(output_path, pagesize=(width, height))
@@ -63,8 +62,52 @@ def generate_label_pdf(sku, upc_code, lot_num, output_path):
 
     c.save()
 
-# Function to generate PDFs and compress them into a ZIP file (Excel upload)
-def generate_pdfs_from_excel(df):
+# New Function to generate FNSKU labels in PDF format using Code128 (Excel upload for AMZ)
+def generate_fnsku_label_pdf(sku, fnsku_code, lot_num, output_path):
+    width, height = 60 * mm, 35 * mm
+    c = canvas.Canvas(output_path, pagesize=(width, height))
+
+    x_margin = 4.5 * mm
+    y_sku = height - 7.75 * mm
+    y_barcode = height / 2 - 8 * mm
+    y_lot = 4.75 * mm
+    barcode_width = 51.5 * mm
+
+    c.setFont("Helvetica", 9.5)
+    c.drawCentredString(width / 2, y_sku, sku)
+
+    barcode_filename = clean_filename(f"{sku}_barcode")
+    barcode_path = f"{barcode_filename}.png"
+
+    options = {
+        'module_width': 0.35,
+        'module_height': 16,
+        'font_size': 7.75,
+        'text_distance': 4.5,
+        'quiet_zone': 1.25,
+        'dpi': 600
+    }
+
+    barcode_fnsku = Code128(fnsku_code, writer=ImageWriter())
+    barcode_fnsku.save(barcode_filename, options)
+
+    c.drawImage(barcode_path, (width - barcode_width) / 2, y_barcode, width=barcode_width, height=16 * mm)
+    os.remove(barcode_path)
+
+    c.setFont("Helvetica", 9)
+    if lot_num:
+        lot_box_width = 40 * mm
+        lot_box_height = 4 * mm
+        x_lot_box = (width - lot_box_width) / 2
+        y_lot_box = y_lot - 1.125 * mm
+        c.setStrokeColorRGB(0, 0, 0)
+        c.rect(x_lot_box, y_lot_box, lot_box_width, lot_box_height, stroke=1, fill=0)
+        c.drawCentredString(width / 2, y_lot, lot_num)
+
+    c.save()
+
+# Function to generate PDFs and compress them into a ZIP file (Excel upload for AMZ)
+def generate_amz_pdfs_from_excel(df):
     required_columns = ['SKU', 'UPC Code', 'LOT#']
     missing_columns = [col for col in required_columns if col not in df.columns]
     if missing_columns:
@@ -82,11 +125,11 @@ def generate_pdfs_from_excel(df):
 
     for index, row in df.iterrows():
         sku = row['SKU']
-        upc_code = str(row['UPC Code']).zfill(12)
+        fnsku_code = str(row['UPC Code']).zfill(12)
         lot_num = row['LOT#'] if pd.notnull(row['LOT#']) else ""
         pdf_filename = clean_filename(f"{sku}.pdf")
         pdf_path = os.path.join(output_folder, pdf_filename)
-        generate_label_pdf(sku, upc_code, lot_num, pdf_path)
+        generate_fnsku_label_pdf(sku, fnsku_code, lot_num, pdf_path)
 
         progress_bar.progress((index + 1) / total_rows)
 
@@ -159,16 +202,16 @@ def split_fnsku_pdf(uploaded_pdf):
 # Streamlit interface
 st.title("Label Tools")
 
-option = st.selectbox("Choose an action", ["Generate Labels", "Split FNSKU Labels"], key="action_select")
+option = st.selectbox("Choose an action", ["Generate D2C Labels", "Generate AMZ Labels", "Split FNSKUs PDF"], key="action_select")
 
-if option == "Generate Labels":
+if option == "Generate D2C Labels":
     st.write("Upload an Excel file with SKU, UPC, and LOT# (if applicable)")
     uploaded_file = st.file_uploader("Upload Excel file", type=["xlsx"], key="excel_uploader")
 
     if uploaded_file is not None:
         try:
             df = pd.read_excel(uploaded_file)
-            if st.button("Generate Labels", key="generate_labels"):
+            if st.button("Generate D2C Labels", key="generate_d2c_labels"):
                 zip_path = generate_pdfs_from_excel(df)
                 if zip_path:
                     with open(zip_path, "rb") as f:
@@ -176,7 +219,22 @@ if option == "Generate Labels":
         except Exception as e:
             st.error(f"Error reading the Excel file: {e}")
 
-elif option == "Split FNSKU Labels":
+elif option == "Generate AMZ Labels":
+    st.write("Upload an Excel file with SKU, FNSKU (as UPC Code), and LOT# (if applicable)")
+    uploaded_file = st.file_uploader("Upload Excel file", type=["xlsx"], key="excel_amz_uploader")
+
+    if uploaded_file is not None:
+        try:
+            df = pd.read_excel(uploaded_file)
+            if st.button("Generate AMZ Labels", key="generate_amz_labels"):
+                zip_path = generate_amz_pdfs_from_excel(df)
+                if zip_path:
+                    with open(zip_path, "rb") as f:
+                        st.download_button("Download ZIP file with AMZ Labels", f, file_name=zip_path)
+        except Exception as e:
+            st.error(f"Error reading the Excel file: {e}")
+
+elif option == "Split FNSKUs PDF":
     st.write("Upload a PDF file to split FNSKU labels")
     uploaded_pdf = st.file_uploader("Upload PDF file", type=["pdf"], key="pdf_uploader")
 
