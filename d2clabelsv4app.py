@@ -102,44 +102,9 @@ def generate_label_pdf(sku, upc_code, lot_num, output_path):
 
     c.save()
 
-# Función para generar PDFs para D2C y comprimirlos en un ZIP
-def generate_pdfs_from_excel(df):
-    required_columns = ['SKU', 'UPC Code', 'LOT#']
-    missing_columns = [col for col in required_columns if col not in df.columns]
-    if missing_columns:
-        st.error(f"Missing columns in the Excel file: {', '.join(missing_columns)}")
-        return None
-
-    first_sku = df.iloc[0]['SKU']
-    current_date = datetime.now().strftime("%Y%m%d")
-
-    output_folder = f"{first_sku}_{current_date}"
-    os.makedirs(output_folder, exist_ok=True)
-
-    total_rows = len(df)
-    progress_bar = st.progress(0)
-
-    for index, row in df.iterrows():
-        sku = row['SKU']
-        upc_code = str(row['UPC Code']).zfill(12)
-        lot_num = row['LOT#'] if pd.notnull(row['LOT#']) else ""
-        pdf_filename = clean_filename(f"{sku}.pdf")
-        pdf_path = os.path.join(output_folder, pdf_filename)
-        generate_label_pdf(sku, upc_code, lot_num, pdf_path)
-
-        progress_bar.progress((index + 1) / total_rows)
-
-    zip_filename = f"{output_folder}.zip"
-    with ZipFile(zip_filename, 'w') as zipObj:
-        for folder_name, subfolders, filenames in os.walk(output_folder):
-            for filename in filenames:
-                filepath = os.path.join(folder_name, filename)
-                zipObj.write(filepath, os.path.basename(filepath))
-
-    return zip_filename
-
 # Función para crear el PDF de la etiqueta FNSKU
 def create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder):
+    # Ruta correcta para guardar el archivo PDF en la carpeta de salida
     pdf_filename = os.path.join(output_folder, f"{sku}_fnsku_label.pdf")
     c = canvas.Canvas(pdf_filename, pagesize=(60 * mm, 35 * mm))
     
@@ -184,7 +149,7 @@ def generate_fnsku_pdfs_from_excel(df):
         barcode_image = generate_barcode(fnsku, sku, barcode_type="Code128")
         pdf_filename = clean_filename(f"{sku}.pdf")
         pdf_path = os.path.join(output_folder, pdf_filename)
-        create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot_num, pdf_path)
+        create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot_num, output_folder)
 
         progress_bar.progress((index + 1) / total_rows)
 
