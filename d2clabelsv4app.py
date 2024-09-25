@@ -135,44 +135,28 @@ def generate_pdfs_from_excel(df):
 
     return zip_filename
 
-# Función para generar FNSKU labels en PDF
-def generate_fnsku_label_pdf(sku, fnsku, product_name, lot, output_path):
-    width, height = 60 * mm, 35 * mm
-    c = canvas.Canvas(output_path, pagesize=(width, height))
+# Función para crear el PDF de la etiqueta FNSKU
+def create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder):
+    # Ajustar el tamaño del PDF a 60mm x 35mm
+    pdf_filename = os.path.join(output_folder, f"{sku}_fnsku_label.pdf")
+    c = canvas.Canvas(pdf_filename, pagesize=(60 * mm, 35 * mm))
+    
+    # Ajustar la imagen del código de barras
+    c.drawImage(barcode_image, 4.5 * mm, 10 * mm, width=51.5 * mm, height=16 * mm)  # Ajuste de dimensiones
+    
+    # Ajuste del tamaño de la fuente
+    font_size = 9
+    c.setFont("Helvetica", font_size)
 
-    x_margin = 4.5 * mm
-    y_sku = height - 7.75 * mm
-    y_barcode = height / 2 - 8 * mm
-    y_lot = 4.75 * mm
-    barcode_width = 51.5 * mm
-
-    c.setFont("Helvetica", 9.5)
-    c.drawCentredString(width / 2, y_sku, sku)
-
-    barcode_filename = clean_filename(f"{sku}_barcode")
-    barcode_path = f"{barcode_filename}.png"
-
-    options = {
-        'module_width': 0.35,
-        'module_height': 16,
-        'font_size': 7.75,
-        'text_distance': 4.5,
-        'quiet_zone': 1.25,
-        'dpi': 600
-    }
-
-    barcode_fnsku = Code128(fnsku, writer=ImageWriter())
-    barcode_fnsku.save(barcode_filename, options)
-
-    c.drawImage(barcode_path, (width - barcode_width) / 2, y_barcode, width=barcode_width, height=16 * mm)
-    os.remove(barcode_path)
-
-    c.setFont("Helvetica", 9)
+    # Ajustar el nombre del producto
     if product_name:
-        c.drawString(5 * mm, 3.5 * mm, product_name)
+        wrap_text_to_two_lines(product_name, max_length=23, c=c, start_x=5 * mm, start_y=7.75 * mm, line_height=font_size + 2, max_width=38)
+    
+    # Añadir el número de lote si está disponible
     if lot:
-        c.drawString(5 * mm, 1.5 * mm, f"Lot: {lot}")
-
+        c.drawString(5 * mm, 3.5 * mm, f"Lot: {lot}")
+    
+    c.showPage()
     c.save()
 
 # Función para generar PDFs para FNSKU y comprimirlos en un ZIP
@@ -197,9 +181,10 @@ def generate_fnsku_pdfs_from_excel(df):
         fnsku = row['FNSKU']
         product_name = row['Product Name'] if pd.notnull(row['Product Name']) else ""
         lot_num = row['LOT#'] if pd.notnull(row['LOT#']) else ""
+        barcode_image = generate_barcode(fnsku, sku, barcode_type="Code128")
         pdf_filename = clean_filename(f"{sku}.pdf")
         pdf_path = os.path.join(output_folder, pdf_filename)
-        generate_fnsku_label_pdf(sku, fnsku, product_name, lot_num, pdf_path)
+        create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot_num, pdf_path)
 
         progress_bar.progress((index + 1) / total_rows)
 
