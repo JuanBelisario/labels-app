@@ -52,6 +52,21 @@ def show_template_download_buttons():
 def clean_filename(name):
     return re.sub(r'[<>:"/\\|?*]', '', name)
 
+# Función para generar código de barras como imagen temporal
+def generate_barcode(code, sku, barcode_type="EAN13"):
+    barcode = EAN13(code, writer=ImageWriter()) if barcode_type == "EAN13" else Code128(code, writer=ImageWriter())
+    barcode.writer.set_options({
+        'module_width': 0.35,
+        'module_height': 16,
+        'font_size': 7.75,
+        'text_distance': 4.5,
+        'quiet_zone': 1.25,
+        'dpi': 600
+    })
+    barcode_filename = f"{sku}_barcode"
+    barcode.save(barcode_filename)
+    return f"{barcode_filename}.png"
+
 # Función para generar UPC labels (D2C) en PDF
 def generate_label_pdf(sku, upc_code, lot_num, output_path):
     width, height = 60 * mm, 35 * mm
@@ -70,19 +85,7 @@ def generate_label_pdf(sku, upc_code, lot_num, output_path):
         upc_code = '0' + upc_code
 
     barcode_filename = clean_filename(f"{sku}_barcode")
-    barcode_path = f"{barcode_filename}.png"
-
-    options = {
-        'module_width': 0.35,
-        'module_height': 16,
-        'font_size': 7.75,
-        'text_distance': 4.5,
-        'quiet_zone': 1.25,
-        'dpi': 600
-    }
-
-    barcode_ean = EAN13(upc_code, writer=ImageWriter())
-    barcode_ean.save(barcode_filename, options)
+    barcode_path = generate_barcode(upc_code, sku, barcode_type="EAN13")
 
     c.drawImage(barcode_path, (width - barcode_width) / 2, y_barcode, width=barcode_width, height=16 * mm)
     os.remove(barcode_path)
@@ -137,14 +140,12 @@ def generate_pdfs_from_excel(df):
 
 # Función para crear el PDF de la etiqueta FNSKU
 def create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder):
-    # Ajustar el tamaño del PDF a 60mm x 35mm
     pdf_filename = os.path.join(output_folder, f"{sku}_fnsku_label.pdf")
     c = canvas.Canvas(pdf_filename, pagesize=(60 * mm, 35 * mm))
     
     # Ajustar la imagen del código de barras
     c.drawImage(barcode_image, 4.5 * mm, 10 * mm, width=51.5 * mm, height=16 * mm)  # Ajuste de dimensiones
     
-    # Ajuste del tamaño de la fuente
     font_size = 9
     c.setFont("Helvetica", font_size)
 
@@ -152,7 +153,6 @@ def create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder
     if product_name:
         wrap_text_to_two_lines(product_name, max_length=23, c=c, start_x=5 * mm, start_y=7.75 * mm, line_height=font_size + 2, max_width=38)
     
-    # Añadir el número de lote si está disponible
     if lot:
         c.drawString(5 * mm, 3.5 * mm, f"Lot: {lot}")
     
