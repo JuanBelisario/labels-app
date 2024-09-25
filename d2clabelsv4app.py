@@ -9,7 +9,7 @@ from barcode import EAN13, Code128
 from barcode.writer import ImageWriter
 from datetime import datetime
 from zipfile import ZipFile
-import shutil  # Para eliminar archivos temporales al final
+import shutil
 import textwrap
 
 # Función para generar el archivo Excel de plantilla para D2C Labels
@@ -99,8 +99,18 @@ def create_label_pdf(barcode_image, sku, product_name, lot, output_folder, label
     c.showPage()
     c.save()
 
-# Función para generar PDFs y comprimirlos en un archivo ZIP (aplicable tanto para D2C como para FNSKU)
+# Función para validar y generar etiquetas desde el archivo Excel
 def generate_labels_from_excel(df, label_type="D2C"):
+    if label_type == "D2C":
+        required_columns = ['SKU', 'UPC Code', 'LOT#']
+    else:
+        required_columns = ['SKU', 'FNSKU', 'Product Name', 'LOT#']
+
+    missing_columns = [col for col in required_columns if col not in df.columns]
+    if missing_columns:
+        st.error(f"Missing columns in the Excel file: {', '.join(missing_columns)}")
+        return None
+
     first_sku = df.iloc[0]['SKU']
     current_date = datetime.now().strftime("%Y%m%d")
     output_folder = f"{first_sku}_{current_date}"
