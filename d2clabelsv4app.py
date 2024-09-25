@@ -11,6 +11,7 @@ from datetime import datetime
 from zipfile import ZipFile
 from PyPDF2 import PdfReader, PdfWriter
 import pdfplumber
+import textwrap
 
 # Función para generar el archivo Excel de plantilla para D2C Labels
 def generate_d2c_template():
@@ -52,10 +53,10 @@ def show_template_download_buttons():
 def clean_filename(name):
     return re.sub(r'[<>:"/\\|?*]', '', name)
 
-# Función para generar código de barras como imagen temporal
-def generate_barcode(code, sku, barcode_type="EAN13"):
-    barcode = EAN13(code, writer=ImageWriter()) if barcode_type == "EAN13" else Code128(code, writer=ImageWriter())
-    barcode.writer.set_options({
+# Función para generar código de barras FNSKU como imagen temporal
+def generate_fnsku_barcode(fnsku, sku):
+    fnsku_barcode = Code128(fnsku, writer=ImageWriter())
+    fnsku_barcode.writer.set_options({
         'module_width': 0.35,
         'module_height': 16,
         'font_size': 7.75,
@@ -64,32 +65,102 @@ def generate_barcode(code, sku, barcode_type="EAN13"):
         'dpi': 600
     })
     barcode_filename = f"{sku}_barcode"
-    barcode.save(barcode_filename)
+    fnsku_barcode.save(barcode_filename)
     return f"{barcode_filename}.png"
 
-# Función para generar UPC labels (D2C) en PDF
+# Función para manejar el texto largo del nombre del producto en la etiqueta FNSKU
+def wrap_text_to_two_lines(text, max_length, c, start_x, start_y, line_height, max_width):
+    text = str(text) if pd.notna(text) else ""
+    if len(text) > 2 * max_length:
+        text_to_display = text[:max_length] + '...' + text[-max_length:]
+    else:
+        text_to_display = text
+    
+    lines = textwrap.wrap(text_to_display, width=max_width)
+    if len(lines) > 2:
+        lines = lines[:2]
+        lines[-1] = lines[-1][:max_width - 3] + '...'
+
+    for i, line in enumerate(lines):
+        c.drawString(start_x, start_y - i * line_height, line)
+
+# Función para crear el PDF de la etiqueta FNSKU
+def create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder):
+    pdf_filename = os.path.join(output_folder, f"{sku}_fnsku_label.pdf")
+    c = canvas.Canvas(pdf_filename, pagesize=(60 * mm, 35 * mm))
+    c.drawImage(barcode_image, 4.5 * mm, 10 * mm, width=51.5 * mm, height=16 * mm)
+    font_size = 9
+    c.setFont("Helvetica", font_size)
+    if product_name:
+        wrap_text_to_two_lines(product_name, max_length=23, c=c, start_x=5 * mm, start_y=7.75 * mm, line_height=font_size + 2, max_width=38)
+    if lot:
+        c.drawString(5 * mm, 3.5 * mm, f"Lot: {lot}")
+    c.showPage()
+    c.save()
+
+# Función para generar PDFs y comprimirlos en un archivo ZIP (FNSKU)
+def generate_fnsku_labels_from_excel(df):
+    first_fnsku = df.iloc[0]['FNSKU']
+    current_date = datetime.now().strftime("%Y%m%d")
+    output_folder = f"{first_fnsku}_{current_date}"
+    os.makedirs(output_folder, exist_ok=True)
+
+    total_rows = len(df)
+    progress_bar = st.progress(0)
+
+    for index, row in df.iterrows():
+        sku = str(row['SKU']) if pd.notna(row['SKU']) else ''
+        fnsku = str(row['FNSKU']) if pd.notna(row['FNSKU']) else ''
+        product_name = str(row['Product Name']) if pd.notna(row['Product Name']) else ''
+        lot = str(row['LOT#']) if pd.notna(row['LOT#']) else ''
+        
+        # Generar el código de barras FNSKU temporalmente
+        barcode_image = generate_fnsku_barcode(fnsku, sku)
+
+        # Crear el PDF con la etiqueta FNSKU
+        create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder)
+
+        progress_bar.progress((index + 1) / total_rows)
+
+    # Comprimir solo los PDFs generados en un archivo ZIP, ignorando los PNG
+    zip_filename = f"{output_folder}.zip"
+    with ZipFile(zip_filename, 'w') as zipObj:
+        for folder_name, subfolders, filenames in os.walk(output_folder):
+            for filename in filenames:
+                # Ignorar archivos PNG, incluir solo PDFs en el ZIP
+                if filename.endswith(".pdf"):
+                    filepath = os.path.join(folder_name, filename)
+                    zipObj.write(filepath, os.path.basename(filepath))
+
+    return zip_filename
+
+# Función para generar etiquetas D2C en PDF con UPC
 def generate_label_pdf(sku, upc_code, lot_num, output_path):
     width, height = 60 * mm, 35 * mm
     c = canvas.Canvas(output_path, pagesize=(width, height))
-
     x_margin = 4.5 * mm
     y_sku = height - 7.75 * mm
     y_barcode = height / 2 - 8 * mm
     y_lot = 4.75 * mm
     barcode_width = 51.5 * mm
-
     c.setFont("Helvetica", 9.5)
     c.drawCentredString(width / 2, y_sku, sku)
-
     if len(upc_code) == 12:
         upc_code = '0' + upc_code
-
     barcode_filename = clean_filename(f"{sku}_barcode")
-    barcode_path = generate_barcode(upc_code, sku, barcode_type="EAN13")
-
+    barcode_path = f"{barcode_filename}.png"
+    options = {
+        'module_width': 0.35,
+        'module_height': 16,
+        'font_size': 7.75,
+        'text_distance': 4.5,
+        'quiet_zone': 1.25,
+        'dpi': 600
+    }
+    barcode_ean = EAN13(upc_code, writer=ImageWriter())
+    barcode_ean.save(barcode_path, options)
     c.drawImage(barcode_path, (width - barcode_width) / 2, y_barcode, width=barcode_width, height=16 * mm)
     os.remove(barcode_path)
-
     c.setFont("Helvetica", 9)
     if lot_num:
         lot_box_width = 40 * mm
@@ -99,34 +170,11 @@ def generate_label_pdf(sku, upc_code, lot_num, output_path):
         c.setStrokeColorRGB(0, 0, 0)
         c.rect(x_lot_box, y_lot_box, lot_box_width, lot_box_height, stroke=1, fill=0)
         c.drawCentredString(width / 2, y_lot, lot_num)
-
     c.save()
 
-# Función para crear el PDF de la etiqueta FNSKU
-def create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder):
-    # Ruta correcta para guardar el archivo PDF en la carpeta de salida
-    pdf_filename = os.path.join(output_folder, f"{sku}_fnsku_label.pdf")
-    c = canvas.Canvas(pdf_filename, pagesize=(60 * mm, 35 * mm))
-    
-    # Ajustar la imagen del código de barras
-    c.drawImage(barcode_image, 4.5 * mm, 10 * mm, width=51.5 * mm, height=16 * mm)  # Ajuste de dimensiones
-    
-    font_size = 9
-    c.setFont("Helvetica", font_size)
-
-    # Ajustar el nombre del producto
-    if product_name:
-        wrap_text_to_two_lines(product_name, max_length=23, c=c, start_x=5 * mm, start_y=7.75 * mm, line_height=font_size + 2, max_width=38)
-    
-    if lot:
-        c.drawString(5 * mm, 3.5 * mm, f"Lot: {lot}")
-    
-    c.showPage()
-    c.save()
-
-# Función para generar PDFs para FNSKU y comprimirlos en un ZIP
-def generate_fnsku_pdfs_from_excel(df):
-    required_columns = ['SKU', 'FNSKU', 'Product Name', 'LOT#']
+# Función para la generación de PDFs D2C y FNSKU
+def generate_pdfs_from_excel(df, label_type="D2C"):
+    required_columns = ['SKU', 'UPC Code', 'LOT#'] if label_type == "D2C" else ['SKU', 'FNSKU', 'Product Name', 'LOT#']
     missing_columns = [col for col in required_columns if col not in df.columns]
     if missing_columns:
         st.error(f"Missing columns in the Excel file: {', '.join(missing_columns)}")
@@ -142,73 +190,28 @@ def generate_fnsku_pdfs_from_excel(df):
     progress_bar = st.progress(0)
 
     for index, row in df.iterrows():
-        sku = row['SKU']
-        fnsku = row['FNSKU']
-        product_name = row['Product Name'] if pd.notnull(row['Product Name']) else ""
-        lot_num = row['LOT#'] if pd.notnull(row['LOT#']) else ""
-        barcode_image = generate_barcode(fnsku, sku, barcode_type="Code128")
-        pdf_filename = clean_filename(f"{sku}.pdf")
-        pdf_path = os.path.join(output_folder, pdf_filename)
-        create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot_num, output_folder)
+        sku = str(row['SKU']) if pd.notna(row['SKU']) else ''
+        if label_type == "D2C":
+            upc_code = str(row['UPC Code']).zfill(12)
+            lot_num = str(row['LOT#']) if pd.notna(row['LOT#']) else ""
+            pdf_filename = clean_filename(f"{sku}.pdf")
+            pdf_path = os.path.join(output_folder, pdf_filename)
+            generate_label_pdf(sku, upc_code, lot_num, pdf_path)
+        elif label_type == "FNSKU":
+            fnsku = str(row['FNSKU']) if pd.notna(row['FNSKU']) else ''
+            product_name = str(row['Product Name']) if pd.notna(row['Product Name']) else ''
+            lot_num = str(row['LOT#']) if pd.notna(row['LOT#']) else ""
+            barcode_image = generate_fnsku_barcode(fnsku, sku)
+            create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot_num, output_folder)
 
         progress_bar.progress((index + 1) / total_rows)
 
     zip_filename = f"{output_folder}.zip"
     with ZipFile(zip_filename, 'w') as zipObj:
         for folder_name, subfolders, filenames in os.walk(output_folder):
+            # Solo agregar archivos PDF al ZIP
             for filename in filenames:
-                filepath = os.path.join(folder_name, filename)
-                zipObj.write(filepath, os.path.basename(filepath))
-
-    return zip_filename
-
-# Función para extraer todo el texto de una página usando pdfplumber
-def extract_text_from_page(page):
-    text = page.extract_text()
-    if text:
-        clean_text = re.sub(r'[^\w\s]', '', text)  # Remover caracteres especiales
-        clean_text = "_".join(clean_text.split())  # Reemplazar espacios con guiones bajos
-        if len(clean_text) > 5:  # Solo devolver texto válido con más de 5 caracteres
-            return clean_text
-    return None
-
-# Función para dividir un PDF en múltiples PDFs, uno por página
-def split_fnsku_pdf(uploaded_pdf):
-    # Resetear el puntero del archivo y leer el PDF
-    pdf_file = BytesIO(uploaded_pdf.read())
-    input_pdf = PdfReader(pdf_file)
-    total_pages = len(input_pdf.pages)
-
-    # Crear carpeta de salida
-    output_folder = f"Split_FNSKU_{datetime.now().strftime('%Y%m%d')}"
-    os.makedirs(output_folder, exist_ok=True)
-
-    progress_bar = st.progress(0)
-
-    # Usar pdfplumber para extraer texto
-    pdf_file.seek(0)  # Resetear puntero del archivo
-    with pdfplumber.open(pdf_file) as pdf:
-        for page_num in range(total_pages):
-            writer = PdfWriter()
-            writer.add_page(input_pdf.pages[page_num])
-
-            page = pdf.pages[page_num]
-            page_text = extract_text_from_page(page)
-
-            if page_text:  # Saltar páginas sin texto válido
-                clean_filename_text = clean_filename(page_text)
-                output_filename = os.path.join(output_folder, f"{clean_filename_text}_page_{page_num + 1}.pdf")
-                with open(output_filename, 'wb') as output_pdf:
-                    writer.write(output_pdf)
-
-            progress_bar.progress((page_num + 1) / total_pages)
-
-    # Comprimir los PDFs en un ZIP
-    zip_filename = f"{output_folder}.zip"
-    with ZipFile(zip_filename, 'w') as zipObj:
-        for folder_name, subfolders, filenames in os.walk(output_folder):
-            for filename in filenames:
-                if "unknown" not in filename:
+                if filename.endswith(".pdf"):
                     filepath = os.path.join(folder_name, filename)
                     zipObj.write(filepath, os.path.basename(filepath))
 
@@ -220,19 +223,19 @@ st.title("Label Tools")
 # Mostrar los botones de descarga de plantillas
 show_template_download_buttons()
 
-# Opciones del menú
-option = st.selectbox("Choose an action", ["Generate Labels", "Generate FNSKU Labels", "Split FNSKU PDFs"], key="action_select")
+# Opciones en el menú de la app
+option = st.selectbox("Choose an action", ["Generate D2C Labels", "Generate FNSKU Labels", "Split FNSKU PDFs"], key="action_select")
 
 # Opción: Generate D2C Labels
-if option == "Generate Labels":
+if option == "Generate D2C Labels":
     st.write("Upload an Excel file with SKU, UPC, and LOT# (if applicable)")
     uploaded_file = st.file_uploader("Upload Excel file", type=["xlsx"], key="excel_uploader")
 
     if uploaded_file is not None:
         try:
             df = pd.read_excel(uploaded_file)
-            if st.button("Generate Labels", key="generate_labels"):
-                zip_path = generate_pdfs_from_excel(df)
+            if st.button("Generate D2C Labels", key="generate_d2c_labels"):
+                zip_path = generate_pdfs_from_excel(df, label_type="D2C")
                 if zip_path:
                     with open(zip_path, "rb") as f:
                         st.download_button("Download ZIP file with Labels", f, file_name=zip_path)
@@ -241,14 +244,14 @@ if option == "Generate Labels":
 
 # Opción: Generate FNSKU Labels
 elif option == "Generate FNSKU Labels":
-    st.write("Upload an Excel file with SKU, FNSKU, Product Name, and LOT# (if applicable)")
+    st.write("Upload an Excel file with SKU, FNSKU, and LOT# (if applicable)")
     uploaded_file = st.file_uploader("Upload Excel file", type=["xlsx"], key="excel_fnsku_uploader")
 
     if uploaded_file is not None:
         try:
             df = pd.read_excel(uploaded_file)
             if st.button("Generate FNSKU Labels", key="generate_fnsku_labels"):
-                zip_path = generate_fnsku_pdfs_from_excel(df)
+                zip_path = generate_fnsku_labels_from_excel(df)
                 if zip_path:
                     with open(zip_path, "rb") as f:
                         st.download_button("Download ZIP file with FNSKU Labels", f, file_name=zip_path)
