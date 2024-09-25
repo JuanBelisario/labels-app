@@ -1,6 +1,6 @@
 streamlit==1.20.0  # O la última versión estable
 reportlab==3.6.7
-python-barcode==0.13.1  # Verifica que sea compatible
+
 pandas==1.5.3
 openpyxl==3.1.2
 PyPDF2==3.0.1
