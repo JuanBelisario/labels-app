@@ -53,12 +53,70 @@ def show_template_download_buttons():
 def clean_filename(name):
     return re.sub(r'[<>:"/\\|?*]', '', name)
 
+# Función para generar código de barras FNSKU (Code128) como imagen temporal
+def generate_fnsku_barcode(fnsku, sku):
+    fnsku_barcode = Code128(fnsku, writer=ImageWriter())
+    fnsku_barcode.writer.set_options({
+        'module_width': 0.35,
+        'module_height': 16,
+        'font_size': 7.75,
+        'text_distance': 4.5,
+        'quiet_zone': 1.25,
+        'dpi': 600
+    })
+    barcode_filename = f"{sku}_barcode"
+    fnsku_barcode.save(barcode_filename)
+    return f"{barcode_filename}.png"
+
 # Función para generar código de barras EAN13 (D2C) como imagen temporal
 def generate_d2c_barcode(upc_code, sku):
     barcode_ean = EAN13(upc_code, writer=ImageWriter())
     barcode_filename = f"{sku}_barcode"
     barcode_ean.save(barcode_filename)
     return f"{barcode_filename}.png"
+
+# Función para manejar el texto largo del nombre del producto en la etiqueta FNSKU
+def wrap_text_to_two_lines(text, max_length, c, start_x, start_y, line_height, max_width):
+    text = str(text) if pd.notna(text) else ""
+    if len(text) > 2 * max_length:
+        text_to_display = text[:max_length] + '...' + text[-max_length:]
+    else:
+        text_to_display = text
+    
+    lines = textwrap.wrap(text_to_display, width=max_width)
+    if len(lines) > 2:
+        lines = lines[:2]
+        lines[-1] = lines[-1][:max_width - 3] + '...'
+
+    for i, line in enumerate(lines):
+        c.drawString(start_x, start_y - i * line_height, line)
+
+# Función para crear el PDF de la etiqueta FNSKU
+def create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder):
+    pdf_filename = os.path.join(output_folder, f"{sku}_fnsku_label.pdf")
+    c = canvas.Canvas(pdf_filename, pagesize=(60 * mm, 35 * mm))
+    
+    # Dibujar código de barras
+    c.drawImage(barcode_image, 4.5 * mm, 10 * mm, width=51.5 * mm, height=16 * mm)
+    
+    # Configurar la fuente y tamaño para el texto
+    font_size = 9
+    c.setFont("Helvetica", font_size)
+
+    # Ajustar el nombre del producto
+    if product_name:
+        wrap_text_to_two_lines(product_name, max_length=23, c=c, start_x=5 * mm, start_y=7.75 * mm, line_height=font_size + 2, max_width=38)
+
+    # Añadir el número de lote si está disponible
+    if lot:
+        c.drawString(5 * mm, 3.5 * mm, f"Lot: {lot}")
+
+    c.showPage()
+    c.save()
+
+    # Eliminar el archivo PNG temporal después de usarlo
+    if os.path.exists(barcode_image):
+        os.remove(barcode_image)
 
 # Función para generar UPC labels (D2C) en PDF
 def generate_label_pdf(sku, upc_code, lot_num, output_path):
@@ -131,21 +189,6 @@ def generate_pdfs_from_excel(df):
 
     return zip_filename
 
-# Función para generar código de barras FNSKU (Code128) como imagen temporal
-def generate_fnsku_barcode(fnsku, sku):
-    fnsku_barcode = Code128(fnsku, writer=ImageWriter())
-    fnsku_barcode.writer.set_options({
-        'module_width': 0.35,
-        'module_height': 16,
-        'font_size': 7.75,
-        'text_distance': 4.5,
-        'quiet_zone': 1.25,
-        'dpi': 600
-    })
-    barcode_filename = f"{sku}_barcode"
-    fnsku_barcode.save(barcode_filename)
-    return f"{barcode_filename}.png"
-
 # Función para generar PDFs y comprimirlos en un archivo ZIP (FNSKU)
 def generate_fnsku_labels_from_excel(df):
     first_fnsku = df.iloc[0]['FNSKU']
@@ -176,58 +219,6 @@ def generate_fnsku_labels_from_excel(df):
         for folder_name, subfolders, filenames in os.walk(output_folder):
             for filename in filenames:
                 if "_fnsku_label" in filename:  # Solo incluir los archivos correctos
-                    filepath = os.path.join(folder_name, filename)
-                    zipObj.write(filepath, os.path.basename(filepath))
-
-    return zip_filename
-
-# Función para extraer todo el texto de una página usando pdfplumber
-def extract_text_from_page(page):
-    text = page.extract_text()
-    if text:
-        clean_text = re.sub(r'[^\w\s]', '', text)  # Remover caracteres especiales
-        clean_text = "_".join(clean_text.split())  # Reemplazar espacios con guiones bajos
-        if len(clean_text) > 5:  # Solo devolver texto válido con más de 5 caracteres
-            return clean_text
-    return None
-
-# Función para dividir un PDF en múltiples PDFs, uno por página
-def split_fnsku_pdf(uploaded_pdf):
-    # Resetear el puntero del archivo y leer el PDF
-    pdf_file = BytesIO(uploaded_pdf.read())
-    input_pdf = PdfReader(pdf_file)
-    total_pages = len(input_pdf.pages)
-
-    # Crear carpeta de salida
-    output_folder = f"Split_FNSKU_{datetime.now().strftime('%Y%m%d')}"
-    os.makedirs(output_folder, exist_ok=True)
-
-    progress_bar = st.progress(0)
-
-    # Usar pdfplumber para extraer texto
-    pdf_file.seek(0)  # Resetear puntero del archivo
-    with pdfplumber.open(pdf_file) as pdf:
-        for page_num in range(total_pages):
-            writer = PdfWriter()
-            writer.add_page(input_pdf.pages[page_num])
-
-            page = pdf.pages[page_num]
-            page_text = extract_text_from_page(page)
-
-            if page_text:  # Saltar páginas sin texto válido
-                clean_filename_text = clean_filename(page_text)
-                output_filename = os.path.join(output_folder, f"{clean_filename_text}_page_{page_num + 1}.pdf")
-                with open(output_filename, 'wb') as output_pdf:
-                    writer.write(output_pdf)
-
-            progress_bar.progress((page_num + 1) / total_pages)
-
-    # Comprimir los PDFs en un ZIP
-    zip_filename = f"{output_folder}.zip"
-    with ZipFile(zip_filename, 'w') as zipObj:
-        for folder_name, subfolders, filenames in os.walk(output_folder):
-            for filename in filenames:
-                if "unknown" not in filename:
                     filepath = os.path.join(folder_name, filename)
                     zipObj.write(filepath, os.path.basename(filepath))
 
