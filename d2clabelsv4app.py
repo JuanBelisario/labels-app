@@ -12,6 +12,7 @@ from zipfile import ZipFile
 from PyPDF2 import PdfReader, PdfWriter
 import pdfplumber
 import textwrap
+import shutil  # Para eliminar carpetas temporales
 
 # Función para generar el archivo Excel de plantilla para D2C Labels
 def generate_d2c_template():
@@ -132,6 +133,10 @@ def generate_fnsku_labels_from_excel(df):
                     filepath = os.path.join(folder_name, filename)
                     zipObj.write(filepath, os.path.basename(filepath))
 
+    # Limpieza: eliminar la carpeta de salida y los PNG
+    if os.path.exists(output_folder):
+        shutil.rmtree(output_folder)
+
     return zip_filename
 
 # Función para generar etiquetas D2C en PDF con UPC
@@ -206,6 +211,7 @@ def generate_pdfs_from_excel(df, label_type="D2C"):
 
         progress_bar.progress((index + 1) / total_rows)
 
+    # Comprimir solo los PDFs generados en un archivo ZIP, ignorando los PNG
     zip_filename = f"{output_folder}.zip"
     with ZipFile(zip_filename, 'w') as zipObj:
         for folder_name, subfolders, filenames in os.walk(output_folder):
@@ -214,6 +220,10 @@ def generate_pdfs_from_excel(df, label_type="D2C"):
                 if filename.endswith(".pdf"):
                     filepath = os.path.join(folder_name, filename)
                     zipObj.write(filepath, os.path.basename(filepath))
+
+    # Limpieza: eliminar la carpeta de salida y los archivos temporales
+    if os.path.exists(output_folder):
+        shutil.rmtree(output_folder)
 
     return zip_filename
 
