@@ -9,8 +9,6 @@ from barcode import EAN13, Code128
 from barcode.writer import ImageWriter
 from datetime import datetime
 from zipfile import ZipFile
-from PyPDF2 import PdfReader, PdfWriter
-import pdfplumber
 import textwrap
 
 # Generate D2C Labels Excel template
@@ -76,7 +74,13 @@ def wrap_text_to_two_lines(text, max_length, c, start_x, start_y, line_height, m
 def create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder):
     pdf_filename = os.path.join(output_folder, f"{sku}_fnsku_label.pdf")
     c = canvas.Canvas(pdf_filename, pagesize=(60 * mm, 35 * mm))
-    c.drawImage(barcode_image, 4.5 * mm, 10 * mm, width=51.5 * mm, height=16 * mm)
+    
+    # Check if barcode_image exists before using
+    if os.path.exists(barcode_image):
+        c.drawImage(barcode_image, 4.5 * mm, 10 * mm, width=51.5 * mm, height=16 * mm)
+    else:
+        st.error(f"Barcode image {barcode_image} not found.")
+    
     c.setFont("Helvetica", 9)
     if product_name:
         wrap_text_to_two_lines(product_name, 23, c, start_x=5 * mm, start_y=7.75 * mm, line_height=11, max_width=38)
@@ -91,9 +95,15 @@ def generate_label_pdf(sku, upc_code, lot_num, output_path):
     c = canvas.Canvas(output_path, pagesize=(width, height))
     c.setFont("Helvetica", 9.5)
     c.drawCentredString(width / 2, height - 7.75 * mm, sku)
+    
+    # Generate and check barcode path before use
     barcode_path = generate_d2c_barcode(upc_code, sku)
-    c.drawImage(barcode_path, 4.5 * mm, height / 2 - 8 * mm, width=51.5 * mm, height=16 * mm)
-    os.remove(barcode_path)
+    if os.path.exists(barcode_path):
+        c.drawImage(barcode_path, 4.5 * mm, height / 2 - 8 * mm, width=51.5 * mm, height=16 * mm)
+        os.remove(barcode_path)  # Only remove after successful use
+    else:
+        st.error(f"Barcode image {barcode_path} not found.")
+    
     if lot_num:
         c.setFont("Helvetica", 9)
         c.drawCentredString(width / 2, 4.75 * mm, f"Lot: {lot_num}")
