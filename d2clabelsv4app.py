@@ -1,71 +1,41 @@
-import streamlit as st
-import pandas as pd
-import os
-import re
-from io import BytesIO
-from reportlab.lib.pagesizes import mm
-from reportlab.pdfgen import canvas
-from barcode import EAN13, Code128
-from barcode.writer import ImageWriter
-from datetime import datetime
-from zipfile import ZipFile
-import textwrap
+# Updated function to handle SKUs with "/" for D2C label generation
+def generate_pdfs_from_excel(df):
+    required_columns = ['SKU', 'UPC Code', 'LOT#']
+    missing_columns = [col for col in required_columns if col not in df.columns]
+    if missing_columns:
+        st.error(f"Missing columns in the Excel file: {', '.join(missing_columns)}")
+        return None
 
-# Generate D2C Labels Excel template
-def generate_d2c_template():
-    df = pd.DataFrame(columns=['SKU', 'UPC Code', 'LOT#'])
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df.to_excel(writer, index=False, sheet_name='D2C Template')
-    output.seek(0)
-    return output
+    # Use a cleaned SKU value for filenames, but keep the original for display
+    first_sku = df.iloc[0]['SKU'].replace("/", "_")
+    current_date = datetime.now().strftime("%Y%m%d")
 
-# Generate FNSKU Labels Excel template
-def generate_fnsku_template():
-    df = pd.DataFrame(columns=['SKU', 'FNSKU', 'Product Name', 'LOT#'])
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df.to_excel(writer, index=False, sheet_name='FNSKU Template')
-    output.seek(0)
-    return output
+    output_folder = f"{first_sku}_{current_date}"
+    os.makedirs(output_folder, exist_ok=True)
 
-# Show template download buttons in Streamlit
-def show_template_download_buttons():
-    st.write("Download Templates for D2C Labels and FNSKU Labels:")
-    d2c_template = generate_d2c_template()
-    st.download_button("Download D2C Template", data=d2c_template, file_name="d2c_labels_template.xlsx")
-    fnsku_template = generate_fnsku_template()
-    st.download_button("Download FNSKU Template", data=fnsku_template, file_name="fnsku_labels_template.xlsx")
+    total_rows = len(df)
+    progress_bar = st.progress(0)
 
-# Function to clean up file names
-def clean_filename(name):
-    # Replace "/" with "_" for valid file names
-    name = name.replace("/", "_")
-    return re.sub(r'[<>:"/\\|?*]', '', name)
+    for index, row in df.iterrows():
+        sku = row['SKU'].replace("/", "_")  # Replace "/" in SKU for filenames and barcodes
+        upc_code = str(row['UPC Code']).zfill(12)
+        lot_num = row['LOT#'] if pd.notnull(row['LOT#']) else ""
+        pdf_filename = clean_filename(f"{sku}.pdf")
+        pdf_path = os.path.join(output_folder, pdf_filename)
+        generate_label_pdf(sku, upc_code, lot_num, pdf_path)
 
-# Generate temporary FNSKU barcode (Code128)
-def generate_fnsku_barcode(fnsku, sku):
-    barcode = Code128(fnsku, writer=ImageWriter())
-    barcode.writer.set_options({
-        'module_width': 0.35,
-        'module_height': 16,
-        'font_size': 7.75,
-        'text_distance': 4.5,
-        'quiet_zone': 1.25,
-        'dpi': 600
-    })
-    filename = f"{clean_filename(sku)}_barcode.png"
-    barcode.save(filename)
-    return filename
+        progress_bar.progress((index + 1) / total_rows)
 
-# Generate temporary D2C barcode (EAN13)
-def generate_d2c_barcode(upc_code, sku):
-    barcode = EAN13(upc_code, writer=ImageWriter())
-    filename = f"{clean_filename(sku)}_barcode.png"
-    barcode.save(filename)
-    return filename
+    zip_filename = f"{output_folder}.zip"
+    with ZipFile(zip_filename, 'w') as zipObj:
+        for folder_name, subfolders, filenames in os.walk(output_folder):
+            for filename in filenames:
+                filepath = os.path.join(folder_name, filename)
+                zipObj.write(filepath, os.path.basename(filepath))
 
-# Generate D2C label PDF
+    return zip_filename
+
+# Updated function to generate D2C label PDF with cleaned SKU values
 def generate_label_pdf(sku, upc_code, lot_num, output_path):
     width, height = 60 * mm, 35 * mm
     c = canvas.Canvas(output_path, pagesize=(width, height))
@@ -77,55 +47,15 @@ def generate_label_pdf(sku, upc_code, lot_num, output_path):
     barcode_width = 51.5 * mm
 
     c.setFont("Helvetica", 9.5)
-    c.drawCentredString(width / 2, y_sku, sku)
+    display_sku = sku.replace("_", "/")  # Replace back to "/" for display if needed
+    c.drawCentredString(width / 2, y_sku, display_sku)
 
-    barcode_path = generate_d2c_barcode(upc_code, sku)
+    barcode_path = generate_d2c_barcode(upc_code, sku)  # Generate barcode with cleaned SKU
     if os.path.exists(barcode_path):
-        c.drawImage(barcode_path, 4.5 * mm, height / 2 - 8 * mm, width=barcode_width, height=16 * mm)
+        c.drawImage(barcode_path, (width - barcode_width) / 2, y_barcode, width=barcode_width, height=16 * mm)
         os.remove(barcode_path)
-    else:
-        st.error(f"Barcode image {barcode_path} not found.")
 
     if lot_num:
         c.setFont("Helvetica", 9)
         c.drawCentredString(width / 2, 4.75 * mm, f"Lot: {lot_num}")
     c.save()
-
-# Generate and ZIP PDFs for D2C
-def generate_pdfs_from_excel(df):
-    if df.empty:
-        st.error("The uploaded Excel file is empty or not valid.")
-        return None
-
-    first_sku = df.iloc[0]['SKU']
-    output_folder = f"{clean_filename(first_sku)}_{datetime.now().strftime('%Y%m%d')}"
-    os.makedirs(output_folder, exist_ok=True)
-
-    for index, row in df.iterrows():
-        sku = row['SKU']
-        upc_code = str(row['UPC Code']).zfill(12)
-        lot_num = row['LOT#'] if pd.notnull(row['LOT#']) else ""
-        pdf_path = os.path.join(output_folder, f"{clean_filename(sku)}.pdf")
-        generate_label_pdf(sku, upc_code, lot_num, pdf_path)
-
-    zip_filename = f"{output_folder}.zip"
-    with ZipFile(zip_filename, 'w') as zipObj:
-        for filename in os.listdir(output_folder):
-            zipObj.write(os.path.join(output_folder, filename), filename)
-
-    return zip_filename
-
-# Streamlit UI
-st.title("Label Tools")
-show_template_download_buttons()
-option = st.selectbox("Choose an action", ["Generate D2C Labels", "Generate FNSKU Labels"], key="action_select")
-
-# Generate D2C Labels
-if option == "Generate D2C Labels":
-    uploaded_file = st.file_uploader("Upload Excel file", type=["xlsx"], key="excel_uploader")
-    if uploaded_file and st.button("Generate D2C Labels"):
-        df = pd.read_excel(uploaded_file)
-        zip_path = generate_pdfs_from_excel(df)
-        if zip_path:
-            with open(zip_path, "rb") as f:
-                st.download_button("Download ZIP file with Labels", f, file_name=zip_path)
