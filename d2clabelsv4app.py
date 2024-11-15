@@ -86,7 +86,7 @@ def wrap_text_to_two_lines(text, max_length, c, start_x, start_y, line_height, m
     lines = textwrap.wrap(text_to_display, width=max_width-2)
     if len(lines) > 2:
         lines = lines[:2]
-        lines[-1] = lines[-1][:max_width - 3] + '...'
+        lines[-1] = lines[-1][:max_width] + '...'
 
     for i, line in enumerate(lines):
         c.drawString(start_x, start_y - i * line_height, line)
