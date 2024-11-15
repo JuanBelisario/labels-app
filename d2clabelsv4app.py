@@ -105,7 +105,7 @@ def create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder
 
     # Ajustar el nombre del producto
     if product_name:
-        wrap_text_to_two_lines(product_name, max_length=23, c=c, start_x=5 * mm, start_y=7.75 * mm, line_height=font_size - 1, max_width=34)
+        wrap_text_to_two_lines(product_name, max_length=23, c=c, start_x=5 * mm, start_y=7.75 * mm, line_height=font_size - 1, max_width=33.5)
 
     # Añadir el número de lote si está disponible
     if lot:
