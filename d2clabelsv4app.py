@@ -54,7 +54,7 @@ def clean_filename(name):
     return re.sub(r'[<>:"/\\|?*]', '', name)
 
 # Función para generar código de barras FNSKU (Code128) como imagen temporal
-def generate_fnsku_barcode(fnsku, sku):
+def generate_fnsku_barcode(fnsku):
     fnsku_barcode = Code128(fnsku, writer=ImageWriter())
     fnsku_barcode.writer.set_options({
         'module_width': 0.35,
@@ -64,7 +64,7 @@ def generate_fnsku_barcode(fnsku, sku):
         'quiet_zone': 1.25,
         'dpi': 600
     })
-    barcode_filename = f"{sku}_barcode"
+    barcode_filename = f"{fnsku}_barcode"
     fnsku_barcode.save(barcode_filename)
     return f"{barcode_filename}.png"
 
@@ -93,7 +93,7 @@ def wrap_text_to_two_lines(text, max_length, c, start_x, start_y, line_height, m
 
 # Función para crear el PDF de la etiqueta FNSKU
 def create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder):
-    pdf_filename = os.path.join(output_folder, f"{sku}_fnsku_label.pdf")
+    pdf_filename = os.path.join(output_folder, f"{fnsku}_fnsku_label.pdf")
     c = canvas.Canvas(pdf_filename, pagesize=(60 * mm, 35 * mm))
     
     # Dibujar código de barras
