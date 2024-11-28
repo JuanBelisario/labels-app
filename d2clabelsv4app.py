@@ -92,7 +92,7 @@ def wrap_text_to_two_lines(text, max_length, c, start_x, start_y, line_height, m
         c.drawString(start_x, start_y - i * line_height, line)
 
 # Función para crear el PDF de la etiqueta FNSKU
-def create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder):
+def create_fnsku_pdf(barcode_image, fnsku, sku, product_name, output_folder):
     pdf_filename = os.path.join(output_folder, f"{sku}_fnsku_label.pdf")
     c = canvas.Canvas(pdf_filename, pagesize=(60 * mm, 35 * mm))
     
@@ -106,10 +106,6 @@ def create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder
     # Ajustar el nombre del producto
     if product_name:
         wrap_text_to_two_lines(product_name, max_length=21, c=c, start_x=5 * mm, start_y=7.75 * mm, line_height=font_size - 1.5, max_width=33.5)
-
-    # Añadir el número de lote si está disponible
-    if lot:
-        c.drawString(5 * mm, 3.5 * mm, f"Lot: {lot}")
 
     c.showPage()
     c.save()
