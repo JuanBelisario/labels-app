@@ -203,26 +203,28 @@ def generate_fnsku_labels_from_excel(df):
         sku = str(row['SKU']) if pd.notna(row['SKU']) else ''
         fnsku = str(row['FNSKU']) if pd.notna(row['FNSKU']) else ''
         product_name = str(row['Product Name']) if pd.notna(row['Product Name']) else ''
-        lot = str(row['LOT#']) if pd.notna(row['LOT#']) else ''
+        # Ignore blank or NaN values in LOT#
+        lot = str(row['LOT#']) if pd.notnull(row['LOT#']) else ''
         
-        # Generar el código de barras FNSKU temporalmente
+        # Generate the FNSKU barcode temporarily
         barcode_image = generate_fnsku_barcode(fnsku, sku)
 
-        # Crear el PDF con la etiqueta FNSKU y eliminar el PNG después
+        # Create the FNSKU label PDF and remove the PNG afterward
         create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder)
 
         progress_bar.progress((index + 1) / total_rows)
 
-    # Comprimir solo los PDFs que tengan el sufijo "_fnsku_label" en el nombre
+    # Compress only the PDFs with the suffix "_fnsku_label" in their name
     zip_filename = f"{output_folder}.zip"
     with ZipFile(zip_filename, 'w') as zipObj:
         for folder_name, subfolders, filenames in os.walk(output_folder):
             for filename in filenames:
-                if "_fnsku_label" in filename:  # Solo incluir los archivos correctos
+                if "_fnsku_label" in filename:
                     filepath = os.path.join(folder_name, filename)
                     zipObj.write(filepath, os.path.basename(filepath))
 
     return zip_filename
+
 
 # Streamlit UI
 st.title("Label Tools")
