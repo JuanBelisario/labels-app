@@ -54,7 +54,7 @@ def clean_filename(name):
     return re.sub(r'[<>:"/\\|?*]', '', name)
 
 # Función para generar código de barras FNSKU (Code128) como imagen temporal
-def generate_fnsku_barcode(fnsku):
+def generate_fnsku_barcode(fnsku, sku):
     fnsku_barcode = Code128(fnsku, writer=ImageWriter())
     fnsku_barcode.writer.set_options({
         'module_width': 0.35,
