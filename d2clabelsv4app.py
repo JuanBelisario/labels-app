@@ -24,7 +24,7 @@ def generate_d2c_template():
 
 # Función para generar el archivo Excel de plantilla para FNSKU Labels
 def generate_fnsku_template():
-    df = pd.DataFrame(columns=['SKU', 'FNSKU', 'Product Name'])
+    df = pd.DataFrame(columns=['SKU', 'FNSKU', 'Product Name', 'LOT#'])
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='FNSKU Template')
@@ -92,7 +92,7 @@ def wrap_text_to_two_lines(text, max_length, c, start_x, start_y, line_height, m
         c.drawString(start_x, start_y - i * line_height, line)
 
 # Función para crear el PDF de la etiqueta FNSKU
-def create_fnsku_pdf(barcode_image, fnsku, sku, product_name, output_folder):
+def create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder):
     pdf_filename = os.path.join(output_folder, f"{sku}_fnsku_label.pdf")
     c = canvas.Canvas(pdf_filename, pagesize=(60 * mm, 35 * mm))
     
@@ -106,6 +106,10 @@ def create_fnsku_pdf(barcode_image, fnsku, sku, product_name, output_folder):
     # Ajustar el nombre del producto
     if product_name:
         wrap_text_to_two_lines(product_name, max_length=21, c=c, start_x=5 * mm, start_y=7.75 * mm, line_height=font_size - 1.5, max_width=33.5)
+
+    # Añadir el número de lote si está disponible
+    if lot:
+        c.drawString(5 * mm, 3.5 * mm, f"Lot: {lot}")
 
     c.showPage()
     c.save()
@@ -199,26 +203,26 @@ def generate_fnsku_labels_from_excel(df):
         sku = str(row['SKU']) if pd.notna(row['SKU']) else ''
         fnsku = str(row['FNSKU']) if pd.notna(row['FNSKU']) else ''
         product_name = str(row['Product Name']) if pd.notna(row['Product Name']) else ''
+        lot = str(row['LOT#']) if pd.notna(row['LOT#']) else ''
         
-        # Generate the FNSKU barcode temporarily
+        # Generar el código de barras FNSKU temporalmente
         barcode_image = generate_fnsku_barcode(fnsku, sku)
 
-        # Create the FNSKU label PDF and remove the PNG afterward
-        create_fnsku_pdf(barcode_image, fnsku, sku, product_name, output_folder)
+        # Crear el PDF con la etiqueta FNSKU y eliminar el PNG después
+        create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder)
 
         progress_bar.progress((index + 1) / total_rows)
 
-    # Compress only the PDFs with the suffix "_fnsku_label" in their name
+    # Comprimir solo los PDFs que tengan el sufijo "_fnsku_label" en el nombre
     zip_filename = f"{output_folder}.zip"
     with ZipFile(zip_filename, 'w') as zipObj:
         for folder_name, subfolders, filenames in os.walk(output_folder):
             for filename in filenames:
-                if "_fnsku_label" in filename:
+                if "_fnsku_label" in filename:  # Solo incluir los archivos correctos
                     filepath = os.path.join(folder_name, filename)
                     zipObj.write(filepath, os.path.basename(filepath))
 
     return zip_filename
-
 
 # Streamlit UI
 st.title("Label Tools")
@@ -247,7 +251,7 @@ if option == "Generate D2C Labels":
 
 # Opción: Generate FNSKU Labels
 elif option == "Generate FNSKU Labels":
-    st.write("Upload an Excel file with SKU, FNSKU")
+    st.write("Upload an Excel file with SKU, FNSKU, and LOT# (if applicable)")
     uploaded_file = st.file_uploader("Upload Excel file", type=["xlsx"], key="excel_fnsku_uploader")
 
     if uploaded_file is not None:
