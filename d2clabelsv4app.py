@@ -200,10 +200,10 @@ def generate_fnsku_labels_from_excel(df):
     progress_bar = st.progress(0)
 
     for index, row in df.iterrows():
-        sku = str(row['SKU']) if pd.notna(row['SKU']) else ''
-        fnsku = str(row['FNSKU']) if pd.notna(row['FNSKU']) else ''
-        product_name = str(row['Product Name']) if pd.notna(row['Product Name']) else ''
-        lot = str(row['LOT#']) if pd.notna(row['LOT#']) else ''
+        sku = str(row['SKU']) if pd.notna(row['SKU']) else ""
+        fnsku = str(row['FNSKU']) if pd.notna(row['FNSKU']) else ""
+        product_name = str(row['Product Name']) if pd.notna(row['Product Name']) else ""
+        lot = str(row['LOT#']) if pd.notna(row['LOT#']) else ""
         
         # Generar el código de barras FNSKU temporalmente
         barcode_image = generate_fnsku_barcode(fnsku, sku)
