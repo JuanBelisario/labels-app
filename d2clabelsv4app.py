@@ -78,16 +78,22 @@ def generate_d2c_barcode(upc_code, sku):
 # Función para manejar el texto largo del nombre del producto en la etiqueta FNSKU
 def wrap_text_to_two_lines(text, max_length, c, start_x, start_y, line_height, max_width):
     text = str(text) if pd.notna(text) else ""
+    
+    # Ensure the text is not too long for the given max_length
     if len(text) > 2 * max_length:
         text_to_display = text[:max_length] + '...' + text[-max_length:]
     else:
         text_to_display = text
     
-    lines = textwrap.wrap(text_to_display, width=max_width-3)
+    # Wrap the text to fit within the max_width
+    lines = textwrap.wrap(text_to_display, width=max_width)
+    
+    # Ensure we only have two lines, truncate if necessary
     if len(lines) > 2:
         lines = lines[:2]
-        lines[-1] = lines[-1][:max_width] + '...'
+        lines[-1] = lines[-1][:max_width - 3] + '...'
 
+    # Draw each line on the canvas
     for i, line in enumerate(lines):
         c.drawString(start_x, start_y - i * line_height, line)
 
