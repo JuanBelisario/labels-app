@@ -71,7 +71,9 @@ def generate_fnsku_barcode(fnsku):
 # Función para generar código de barras EAN13 (D2C) como imagen temporal
 def generate_d2c_barcode(upc_code, sku):
     barcode_ean = EAN13(upc_code, writer=ImageWriter())
-    barcode_filename = f"{sku}_barcode"
+    # Clean the SKU to create a valid filename
+    clean_sku = clean_filename(sku)
+    barcode_filename = f"{clean_sku}_barcode"
     barcode_ean.save(barcode_filename)
     return f"{barcode_filename}.png"
 
@@ -141,7 +143,6 @@ def generate_label_pdf(sku, upc_code, lot_num, output_path):
     if len(upc_code) == 12:
         upc_code = '0' + upc_code
 
-    barcode_filename = clean_filename(f"{sku}_barcode")
     barcode_path = generate_d2c_barcode(upc_code, sku)
 
     c.drawImage(barcode_path, (width - barcode_width) / 2, y_barcode, width=barcode_width, height=16 * mm)
