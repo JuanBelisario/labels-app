@@ -6,3 +6,5 @@ openpyxl
 PyPDF2
 pdfplumber
 xlsxwriter
+supabase
+Pillow
