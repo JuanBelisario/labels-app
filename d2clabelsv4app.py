@@ -9,8 +9,10 @@ from barcode import EAN13, Code128
 from barcode.writer import ImageWriter
 from datetime import datetime
 from zipfile import ZipFile
-from supabase import create_client
+from PyPDF2 import PdfReader, PdfWriter
+import pdfplumber
 import textwrap
+from supabase import create_client
 
 # Initialize Supabase client
 @st.cache_resource
@@ -38,10 +40,15 @@ def update_sku_database_from_file(file):
             return False, "File must contain 'SKU' and 'UPC' columns"
         
         # Convert DataFrame to records
-        records = df.to_dict('records')
+        records = [{
+            'sku': str(row['SKU']),
+            'upc_code': str(row['UPC'])
+        } for _, row in df.iterrows()]
         
-        # Clear existing data and insert new
-        supabase.table('sku_products').delete().execute()
+        # Delete all existing records with a proper filter
+        supabase.table('sku_products').delete().neq('sku', '').execute()
+        
+        # Insert new records
         supabase.table('sku_products').insert(records).execute()
         
         return True, f"Successfully updated {len(df)} SKU products"
@@ -64,10 +71,15 @@ def update_fnsku_database_from_file(file):
             return False, "File must contain 'FNSKU' and 'Product Name' columns"
         
         # Convert DataFrame to records
-        records = df.to_dict('records')
+        records = [{
+            'fnsku': str(row['FNSKU']),
+            'product_name': str(row['Product Name'])
+        } for _, row in df.iterrows()]
         
-        # Clear existing data and insert new
-        supabase.table('fnsku_products').delete().execute()
+        # Delete all existing records with a proper filter
+        supabase.table('fnsku_products').delete().neq('fnsku', '').execute()
+        
+        # Insert new records
         supabase.table('fnsku_products').insert(records).execute()
         
         return True, f"Successfully updated {len(df)} FNSKU products"
@@ -111,25 +123,27 @@ def check_password():
         # Password correct.
         return True
 
-# Template generation functions
+# Función para generar el archivo Excel de plantilla para D2C Labels
 def generate_d2c_template():
-    df = pd.DataFrame(columns=['SKU', 'LOT#'])
+    df = pd.DataFrame(columns=['SKU', 'UPC Code', 'LOT#'])
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='D2C Template')
     output.seek(0)
     return output
 
+# Función para generar el archivo Excel de plantilla para FNSKU Labels
 def generate_fnsku_template():
-    df = pd.DataFrame(columns=['FNSKU', 'LOT#'])
+    df = pd.DataFrame(columns=['FNSKU', 'Product Name', 'LOT#'])
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='FNSKU Template')
     output.seek(0)
     return output
 
+# Función para mostrar los botones de descarga de plantillas en Streamlit
 def show_template_download_buttons():
-    st.write("Download Templates:")
+    st.write("Download Templates for D2C Labels and FNSKU Labels:")
     d2c_template = generate_d2c_template()
     st.download_button(
         label="Download D2C Template",
@@ -145,11 +159,12 @@ def show_template_download_buttons():
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
-# Label generation functions
+# Función para limpiar nombres de archivos
 def clean_filename(name):
     return re.sub(r'[<>:"/\\|?*]', '', name)
 
-def generate_fnsku_barcode(fnsku):
+# Función para generar código de barras FNSKU (Code128) como imagen temporal
+def generate_fnsku_barcode(fnsku, sku):
     fnsku_barcode = Code128(fnsku, writer=ImageWriter())
     fnsku_barcode.writer.set_options({
         'module_width': 0.35,
@@ -163,14 +178,14 @@ def generate_fnsku_barcode(fnsku):
     fnsku_barcode.save(barcode_filename)
     return f"{barcode_filename}.png"
 
-def generate_d2c_barcode(upc_code):
-    if len(upc_code) == 12:
-        upc_code = '0' + upc_code
+# Función para generar código de barras EAN13 (D2C) como imagen temporal
+def generate_d2c_barcode(upc_code, sku):
     barcode_ean = EAN13(upc_code, writer=ImageWriter())
-    barcode_filename = f"upc_{upc_code}_barcode"
+    barcode_filename = f"{sku}_barcode"
     barcode_ean.save(barcode_filename)
     return f"{barcode_filename}.png"
 
+# Función para manejar el texto largo del nombre del producto en la etiqueta FNSKU
 def wrap_text_to_two_lines(text, max_length, c, start_x, start_y, line_height, max_width):
     text = str(text) if pd.notna(text) else ""
     
@@ -192,34 +207,35 @@ def wrap_text_to_two_lines(text, max_length, c, start_x, start_y, line_height, m
     for i, line in enumerate(lines):
         c.drawString(start_x, start_y - i * line_height, line)
 
-def create_fnsku_pdf(barcode_image, fnsku, product_name, lot, output_folder):
+# Función para crear el PDF de la etiqueta FNSKU
+def create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder):
     pdf_filename = os.path.join(output_folder, f"{fnsku}_fnsku_label.pdf")
     c = canvas.Canvas(pdf_filename, pagesize=(60 * mm, 35 * mm))
     
-    # Draw barcode
+    # Dibujar código de barras
     c.drawImage(barcode_image, 4.5 * mm, 10 * mm, width=51.5 * mm, height=16 * mm)
     
-    # Configure font and size for text
+    # Configurar la fuente y tamaño para el texto
     font_size = 9
     c.setFont("Helvetica", font_size)
 
-    # Adjust product name
+    # Ajustar el nombre del producto
     if product_name:
-        wrap_text_to_two_lines(product_name, max_length=21, c=c, start_x=5 * mm, 
-                             start_y=7.75 * mm, line_height=font_size - 1.5, max_width=33.5)
+        wrap_text_to_two_lines(product_name, max_length=21, c=c, start_x=5 * mm, start_y=7.75 * mm, line_height=font_size - 1.5, max_width=33.5)
 
-    # Add lot number if available
+    # Añadir el número de lote si está disponible
     if lot:
         c.drawString(5 * mm, 3.5 * mm, f"Lot: {lot}")
 
     c.showPage()
     c.save()
 
-    # Remove temporary PNG file
+    # Eliminar el archivo PNG temporal después de usarlo
     if os.path.exists(barcode_image):
         os.remove(barcode_image)
 
-def generate_d2c_label(sku, upc_code, lot_num, output_path):
+# Función para generar UPC labels (D2C) en PDF
+def generate_label_pdf(sku, upc_code, lot_num, output_path):
     width, height = 60 * mm, 35 * mm
     c = canvas.Canvas(output_path, pagesize=(width, height))
 
@@ -232,9 +248,13 @@ def generate_d2c_label(sku, upc_code, lot_num, output_path):
     c.setFont("Helvetica", 9.5)
     c.drawCentredString(width / 2, y_sku, sku)
 
-    barcode_path = generate_d2c_barcode(upc_code)
-    c.drawImage(barcode_path, (width - barcode_width) / 2, y_barcode, 
-                width=barcode_width, height=16 * mm)
+    if len(upc_code) == 12:
+        upc_code = '0' + upc_code
+
+    barcode_filename = clean_filename(f"{sku}_barcode")
+    barcode_path = generate_d2c_barcode(upc_code, sku)
+
+    c.drawImage(barcode_path, (width - barcode_width) / 2, y_barcode, width=barcode_width, height=16 * mm)
     os.remove(barcode_path)
 
     c.setFont("Helvetica", 9)
@@ -249,9 +269,17 @@ def generate_d2c_label(sku, upc_code, lot_num, output_path):
 
     c.save()
 
+# Función para generar PDFs para D2C y comprimirlos en un ZIP
 def generate_pdfs_from_excel(df):
+    required_columns = ['SKU', 'UPC Code', 'LOT#']
+    missing_columns = [col for col in required_columns if col not in df.columns]
+    if missing_columns:
+        st.error(f"Missing columns in the Excel file: {', '.join(missing_columns)}")
+        return None
+
     first_sku = df.iloc[0]['SKU']
     current_date = datetime.now().strftime("%Y%m%d")
+
     output_folder = f"{first_sku}_{current_date}"
     os.makedirs(output_folder, exist_ok=True)
 
@@ -260,13 +288,12 @@ def generate_pdfs_from_excel(df):
 
     for index, row in df.iterrows():
         sku = row['SKU']
-        upc_code = row['UPC Code']
-        lot_num = row['LOT#'] if 'LOT#' in row and pd.notnull(row['LOT#']) else ""
-        
+        upc_code = str(row['UPC Code']).zfill(12)
+        lot_num = row['LOT#'] if pd.notnull(row['LOT#']) else ""
         pdf_filename = clean_filename(f"{sku}.pdf")
         pdf_path = os.path.join(output_folder, pdf_filename)
-        generate_d2c_label(sku, upc_code, lot_num, pdf_path)
-        
+        generate_label_pdf(sku, upc_code, lot_num, pdf_path)
+
         progress_bar.progress((index + 1) / total_rows)
 
     zip_filename = f"{output_folder}.zip"
@@ -278,6 +305,7 @@ def generate_pdfs_from_excel(df):
 
     return zip_filename
 
+# Función para generar PDFs y comprimirlos en un archivo ZIP (FNSKU)
 def generate_fnsku_labels_from_excel(df):
     first_fnsku = df.iloc[0]['FNSKU']
     current_date = datetime.now().strftime("%Y%m%d")
@@ -290,26 +318,26 @@ def generate_fnsku_labels_from_excel(df):
     for index, row in df.iterrows():
         fnsku = str(row['FNSKU']) if pd.notna(row['FNSKU']) else ""
         product_name = str(row['Product Name']) if pd.notna(row['Product Name']) else ""
-        lot = str(row['LOT#']) if 'LOT#' in row and pd.notna(row['LOT#']) else ""
+        lot = str(row['LOT#']) if pd.notna(row['LOT#']) else ""
         
-        barcode_image = generate_fnsku_barcode(fnsku)
-        create_fnsku_pdf(barcode_image, fnsku, product_name, lot, output_folder)
-        
+        # Generar el código de barras FNSKU temporalmente
+        barcode_image = generate_fnsku_barcode(fnsku, fnsku)
+
+        # Crear el PDF con la etiqueta FNSKU y eliminar el PNG después
+        create_fnsku_pdf(barcode_image, fnsku, fnsku, product_name, lot, output_folder)
+
         progress_bar.progress((index + 1) / total_rows)
 
+    # Comprimir solo los PDFs que tengan el sufijo "_fnsku_label" en el nombre
     zip_filename = f"{output_folder}.zip"
     with ZipFile(zip_filename, 'w') as zipObj:
         for folder_name, subfolders, filenames in os.walk(output_folder):
             for filename in filenames:
-                if "_fnsku_label" in filename:
+                if "_fnsku_label" in filename:  # Solo incluir los archivos correctos
                     filepath = os.path.join(folder_name, filename)
                     zipObj.write(filepath, os.path.basename(filepath))
 
     return zip_filename
-
-def parse_input_list(text: str):
-    """Parse comma-separated input into a list, removing whitespace"""
-    return [item.strip() for item in text.split(',') if item.strip()]
 
 def main():
     st.title("Label Tools")
