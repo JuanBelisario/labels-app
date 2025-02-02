@@ -42,7 +42,7 @@ def update_sku_database_from_file(file):
         # Convert DataFrame to records
         records = [{
             'sku': str(row['SKU']),
-            'upc_code': str(row['UPC'])
+            'upc': str(row['UPC'])
         } for _, row in df.iterrows()]
         
         # Delete all existing records with a proper filter
@@ -87,8 +87,8 @@ def update_fnsku_database_from_file(file):
         return False, f"Error updating database: {str(e)}"
 
 def get_upc_for_sku(sku: str) -> str:
-    response = supabase.table('sku_products').select('upc_code').eq('sku', sku).execute()
-    return response.data[0]['upc_code'] if response.data else None
+    response = supabase.table('sku_products').select('upc').eq('sku', sku).execute()
+    return response.data[0]['upc'] if response.data else None
 
 def get_product_name_for_fnsku(fnsku: str) -> str:
     response = supabase.table('fnsku_products').select('product_name').eq('fnsku', fnsku).execute()
