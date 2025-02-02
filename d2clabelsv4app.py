@@ -237,7 +237,7 @@ st.title("Label Tools")
 show_template_download_buttons()
 
 # Opciones del menú
-option = st.selectbox("Choose an action", ["Generate D2C Labels", "Generate FNSKU Labels", "Split FNSKU PDFs"], key="action_select")
+option = st.selectbox("Choose an action", ["Generate D2C Labels", "Generate FNSKU Labels"], key="action_select")
 
 # Opción: Generate D2C Labels
 if option == "Generate D2C Labels":
@@ -270,18 +270,3 @@ elif option == "Generate FNSKU Labels":
                         st.download_button("Download ZIP file with FNSKU Labels", f, file_name=zip_path)
         except Exception as e:
             st.error(f"Error reading the Excel file: {e}")
-
-# Opción: Split FNSKU PDFs
-elif option == "Split FNSKU PDFs":
-    st.write("Upload a PDF file to split FNSKU labels")
-    uploaded_pdf = st.file_uploader("Upload PDF file", type=["pdf"], key="pdf_uploader")
-
-    if uploaded_pdf is not None:
-        if st.button("Split PDF", key="split_pdf"):
-            try:
-                zip_path = split_fnsku_pdf(uploaded_pdf)
-                if zip_path:
-                    with open(zip_path, "rb") as f:
-                        st.download_button("Download ZIP file with Split PDFs", f, file_name=zip_path)
-            except Exception as e:
-                st.error(f"Error processing the PDF file: {e}")
