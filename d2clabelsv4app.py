@@ -24,7 +24,7 @@ def generate_d2c_template():
 
 # Función para generar el archivo Excel de plantilla para FNSKU Labels
 def generate_fnsku_template():
-    df = pd.DataFrame(columns=['SKU', 'FNSKU', 'Product Name', 'LOT#'])
+    df = pd.DataFrame(columns=['FNSKU', 'Product Name', 'LOT#'])
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='FNSKU Template')
@@ -54,7 +54,7 @@ def clean_filename(name):
     return re.sub(r'[<>:"/\\|?*]', '', name)
 
 # Función para generar código de barras FNSKU (Code128) como imagen temporal
-def generate_fnsku_barcode(fnsku, sku):
+def generate_fnsku_barcode(fnsku):
     fnsku_barcode = Code128(fnsku, writer=ImageWriter())
     fnsku_barcode.writer.set_options({
         'module_width': 0.35,
@@ -98,7 +98,7 @@ def wrap_text_to_two_lines(text, max_length, c, start_x, start_y, line_height, m
         c.drawString(start_x, start_y - i * line_height, line)
 
 # Función para crear el PDF de la etiqueta FNSKU
-def create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder):
+def create_fnsku_pdf(barcode_image, fnsku, product_name, lot, output_folder):
     pdf_filename = os.path.join(output_folder, f"{fnsku}_fnsku_label.pdf")
     c = canvas.Canvas(pdf_filename, pagesize=(60 * mm, 35 * mm))
     
@@ -206,16 +206,15 @@ def generate_fnsku_labels_from_excel(df):
     progress_bar = st.progress(0)
 
     for index, row in df.iterrows():
-        sku = str(row['SKU']) if pd.notna(row['SKU']) else ""
         fnsku = str(row['FNSKU']) if pd.notna(row['FNSKU']) else ""
         product_name = str(row['Product Name']) if pd.notna(row['Product Name']) else ""
         lot = str(row['LOT#']) if pd.notna(row['LOT#']) else ""
         
         # Generar el código de barras FNSKU temporalmente
-        barcode_image = generate_fnsku_barcode(fnsku, sku)
+        barcode_image = generate_fnsku_barcode(fnsku)
 
         # Crear el PDF con la etiqueta FNSKU y eliminar el PNG después
-        create_fnsku_pdf(barcode_image, fnsku, sku, product_name, lot, output_folder)
+        create_fnsku_pdf(barcode_image, fnsku, product_name, lot, output_folder)
 
         progress_bar.progress((index + 1) / total_rows)
 
