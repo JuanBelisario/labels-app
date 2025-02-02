@@ -339,6 +339,13 @@ def generate_fnsku_labels_from_excel(df):
 
     return zip_filename
 
+# Move this function definition to the top of the file, with other utility functions
+def parse_input_list(text: str) -> list:
+    """Parse comma-separated input into a list, removing whitespace"""
+    if not text:
+        return []
+    return [item.strip() for item in text.split(',') if item.strip()]
+
 def main():
     st.title("Label Tools")
     
