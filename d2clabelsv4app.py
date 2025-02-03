@@ -83,18 +83,17 @@ def wrap_text_to_two_lines(text, max_length, c, start_x, start_y, line_height, m
     
     # Ensure the text is not too long for the given max_length
     if len(text) > 2 * max_length:
-        text_to_display = text[:22] + '...' + text[-22:]  # Changed from 18 to 22
+        text_to_display = text[:20] + '...' + text[-20:]  # First 20 + ... + Last 20
     else:
         text_to_display = text
     
     # Wrap the text to fit within the max_width
-    lines = textwrap.wrap(text_to_display, width=25)  # Reduced width for better fitting
+    lines = textwrap.wrap(text_to_display, width=25)
     
-    # Ensure we only have two lines, truncate if necessary
+    # Ensure we only have two lines
     if len(lines) > 2:
         lines = lines[:2]
-        lines[-1] = lines[-1][:22] + '...'  # Reduced max chars per line
-
+    
     # Draw each line on the canvas
     for i, line in enumerate(lines):
         c.drawString(start_x, start_y - i * line_height, line)
