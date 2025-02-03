@@ -88,12 +88,12 @@ def wrap_text_to_two_lines(text, max_length, c, start_x, start_y, line_height, m
         text_to_display = text
     
     # Wrap the text to fit within the max_width
-    lines = textwrap.wrap(text_to_display, width=max_width)
+    lines = textwrap.wrap(text_to_display, width=25)  # Reduced width for better fitting
     
     # Ensure we only have two lines, truncate if necessary
     if len(lines) > 2:
         lines = lines[:2]
-        lines[-1] = lines[-1][:max_width - 3] + '...'
+        lines[-1] = lines[-1][:22] + '...'  # Reduced max chars per line
 
     # Draw each line on the canvas
     for i, line in enumerate(lines):
@@ -108,12 +108,12 @@ def create_fnsku_pdf(barcode_image, fnsku, product_name, lot, output_folder):
     c.drawImage(barcode_image, 4.5 * mm, 10 * mm, width=51.5 * mm, height=16 * mm)
     
     # Configurar la fuente y tamaño para el texto
-    font_size = 9
+    font_size = 9  # Back to original size
     c.setFont("Helvetica", font_size)
 
     # Ajustar el nombre del producto
     if product_name:
-        wrap_text_to_two_lines(product_name, max_length=21, c=c, start_x=5 * mm, start_y=7.75 * mm, line_height=font_size - 1.5, max_width=33.5)
+        wrap_text_to_two_lines(product_name, max_length=18, c=c, start_x=5 * mm, start_y=7.75 * mm, line_height=font_size - 1.5, max_width=25)
 
     # Añadir el número de lote si está disponible
     if lot:
