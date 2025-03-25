@@ -15,42 +15,6 @@ import pdfplumber
 import textwrap
 
 # =====================
-# 📁 TEMPLATE FUNCTIONS
-# =====================
-def generate_d2c_template():
-    df = pd.DataFrame(columns=['SKU', 'UPC Code', 'LOT#'])
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df.to_excel(writer, index=False, sheet_name='D2C Template')
-    output.seek(0)
-    return output
-
-def generate_fnsku_template():
-    df = pd.DataFrame(columns=['SKU', 'FNSKU', 'Product Name', 'LOT#'])
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df.to_excel(writer, index=False, sheet_name='FNSKU Template')
-    output.seek(0)
-    return output
-
-def show_template_download_buttons():
-    st.write("Download Templates for D2C Labels and FNSKU Labels:")
-    d2c_template = generate_d2c_template()
-    st.download_button(
-        label="Download D2C Template",
-        data=d2c_template,
-        file_name="d2c_labels_template.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-    fnsku_template = generate_fnsku_template()
-    st.download_button(
-        label="Download FNSKU Template",
-        data=fnsku_template,
-        file_name="fnsku_labels_template.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-
-# =====================
 # 📁 PL BUILDER MODULE
 # =====================
 def build_pl_base(df, transformation=False):
@@ -146,129 +110,6 @@ def build_pl_base(df, transformation=False):
     return output, filename
 
 # =====================
-# 📁 LABEL GENERATION FUNCTIONS
-# =====================
-def clean_filename(filename):
-    # Remove invalid characters from filename
-    return re.sub(r'[<>:"/\\|?*]', '', filename)
-
-def generate_label_pdf(sku, upc_code, lot_num, output_path):
-    # Create PDF with barcode
-    c = canvas.Canvas(output_path, pagesize=(mm(100), mm(50)))
-    
-    # Draw barcode
-    ean = EAN13(upc_code, writer=ImageWriter())
-    barcode_path = f"temp_{sku}.png"
-    ean.save(barcode_path)
-    
-    # Add barcode image to PDF
-    c.drawImage(barcode_path, mm(5), mm(5), width=mm(40), height=mm(20))
-    
-    # Add text
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(mm(50), mm(30), f"SKU: {sku}")
-    c.drawString(mm(50), mm(20), f"UPC: {upc_code}")
-    if lot_num:
-        c.drawString(mm(50), mm(10), f"LOT: {lot_num}")
-    
-    # Clean up temporary file
-    os.remove(barcode_path)
-    c.save()
-
-def generate_fnsku_label_pdf(sku, fnsku, product_name, lot_num, output_path):
-    # Create PDF with barcode
-    c = canvas.Canvas(output_path, pagesize=(mm(100), mm(50)))
-    
-    # Draw barcode
-    code128 = Code128(fnsku, writer=ImageWriter())
-    barcode_path = f"temp_{fnsku}.png"
-    code128.save(barcode_path)
-    
-    # Add barcode image to PDF
-    c.drawImage(barcode_path, mm(5), mm(5), width=mm(40), height=mm(20))
-    
-    # Add text
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(mm(50), mm(30), f"SKU: {sku}")
-    c.drawString(mm(50), mm(20), f"FNSKU: {fnsku}")
-    c.drawString(mm(50), mm(15), f"Product: {product_name}")
-    if lot_num:
-        c.drawString(mm(50), mm(10), f"LOT: {lot_num}")
-    
-    # Clean up temporary file
-    os.remove(barcode_path)
-    c.save()
-
-def generate_pdfs_from_excel(df):
-    required_columns = ['SKU', 'UPC Code', 'LOT#']
-    missing_columns = [col for col in required_columns if col not in df.columns]
-    if missing_columns:
-        st.error(f"Missing columns in the Excel file: {', '.join(missing_columns)}")
-        return None
-
-    first_sku = df.iloc[0]['SKU']
-    current_date = datetime.now().strftime("%Y%m%d")
-
-    output_folder = f"{first_sku}_{current_date}"
-    os.makedirs(output_folder, exist_ok=True)
-
-    total_rows = len(df)
-    progress_bar = st.progress(0)
-
-    for index, row in df.iterrows():
-        sku = row['SKU']
-        upc_code = str(row['UPC Code']).zfill(12)
-        lot_num = row['LOT#'] if pd.notnull(row['LOT#']) else ""
-        pdf_filename = clean_filename(f"{sku}.pdf")
-        pdf_path = os.path.join(output_folder, pdf_filename)
-        generate_label_pdf(sku, upc_code, lot_num, pdf_path)
-        progress_bar.progress((index + 1) / total_rows)
-
-    zip_filename = f"{output_folder}.zip"
-    with ZipFile(zip_filename, 'w') as zipObj:
-        for folder_name, subfolders, filenames in os.walk(output_folder):
-            for filename in filenames:
-                filepath = os.path.join(folder_name, filename)
-                zipObj.write(filepath, os.path.basename(filepath))
-
-    return zip_filename
-
-def generate_fnsku_labels_from_excel(df):
-    required_columns = ['SKU', 'FNSKU', 'Product Name', 'LOT#']
-    missing_columns = [col for col in required_columns if col not in df.columns]
-    if missing_columns:
-        st.error(f"Missing columns in the Excel file: {', '.join(missing_columns)}")
-        return None
-
-    first_sku = df.iloc[0]['SKU']
-    current_date = datetime.now().strftime("%Y%m%d")
-
-    output_folder = f"{first_sku}_{current_date}"
-    os.makedirs(output_folder, exist_ok=True)
-
-    total_rows = len(df)
-    progress_bar = st.progress(0)
-
-    for index, row in df.iterrows():
-        sku = row['SKU']
-        fnsku = row['FNSKU']
-        product_name = row['Product Name']
-        lot_num = row['LOT#'] if pd.notnull(row['LOT#']) else ""
-        pdf_filename = clean_filename(f"{fnsku}.pdf")
-        pdf_path = os.path.join(output_folder, pdf_filename)
-        generate_fnsku_label_pdf(sku, fnsku, product_name, lot_num, pdf_path)
-        progress_bar.progress((index + 1) / total_rows)
-
-    zip_filename = f"{output_folder}.zip"
-    with ZipFile(zip_filename, 'w') as zipObj:
-        for folder_name, subfolders, filenames in os.walk(output_folder):
-            for filename in filenames:
-                filepath = os.path.join(folder_name, filename)
-                zipObj.write(filepath, os.path.basename(filepath))
-
-    return zip_filename
-
-# =====================
 # 🚀 STREAMLIT APP
 # =====================
 st.set_page_config(page_title="TOs Hub", layout="wide")
@@ -317,16 +158,9 @@ elif module == "PL Builder":
 
     if uploaded_file is not None:
         try:
-            # Get the file content as a string
-            file_content = uploaded_file.getvalue().decode('utf-8')
-            
             if uploaded_file.name.endswith(".csv"):
-                # For CSV files, use StringIO to read the content
-                from io import StringIO
-                csv_data = StringIO(file_content)
-                df = pd.read_csv(csv_data)
+                df = pd.read_csv(uploaded_file)
             else:
-                # For Excel files, read directly from the uploaded file
                 df = pd.read_excel(uploaded_file)
 
             is_transformation = pl_type == "Transformation TO PL"
@@ -341,5 +175,3 @@ elif module == "PL Builder":
                 )
         except Exception as e:
             st.error(f"Error processing file: {e}")
-            st.write("Please make sure your file is in the correct format (CSV or Excel) and contains the required columns.")
-            st.write("For CSV files, make sure they are properly formatted with headers and comma-separated values.")
