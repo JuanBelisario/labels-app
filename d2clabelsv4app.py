@@ -318,9 +318,9 @@ elif module == "PL Builder":
     if uploaded_file is not None:
         try:
             if uploaded_file.name.endswith(".csv"):
-                df = pd.read_csv(uploaded_file)
+                df = pd.read_csv(uploaded_file, engine='python')
             else:
-                df = pd.read_excel(uploaded_file)
+                df = pd.read_excel(uploaded_file, engine='openpyxl')
 
             is_transformation = pl_type == "Transformation TO PL"
             output, filename = build_pl_base(df, transformation=is_transformation)
