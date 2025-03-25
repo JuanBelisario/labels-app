@@ -66,7 +66,7 @@ def build_pl_base(df, transformation=False):
 
     headers = [
         "TO", "SO #", "From Loc", "To Loc", "Trafilea SKU", "Destination SKU", "Required Qty",
-        "Shipping Method", "FG", "Trafilea SKU", "LOT", "Expiration Date", "CARTONS",
+        "Shipping Method", "FG", "LOT", "Expiration Date", "CARTONS",
         "UNITS/Ctn", "Total QTY", "Carton Dimensions(inch) ", "Carton WEIGHT-LB",
         "Pallet Dimensions", "Pallet WEIGHT-LB.", "Pallet #"
     ]
