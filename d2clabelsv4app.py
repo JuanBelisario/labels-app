@@ -317,10 +317,17 @@ elif module == "PL Builder":
 
     if uploaded_file is not None:
         try:
+            # Read the file content into a BytesIO object
+            file_content = BytesIO(uploaded_file.getvalue())
+            
             if uploaded_file.name.endswith(".csv"):
-                df = pd.read_csv(uploaded_file, engine='python')
+                # For CSV files, read as string first to handle encoding
+                file_content.seek(0)
+                df = pd.read_csv(file_content, encoding='utf-8')
             else:
-                df = pd.read_excel(uploaded_file, engine='openpyxl')
+                # For Excel files
+                file_content.seek(0)
+                df = pd.read_excel(file_content, engine='openpyxl')
 
             is_transformation = pl_type == "Transformation TO PL"
             output, filename = build_pl_base(df, transformation=is_transformation)
@@ -334,3 +341,4 @@ elif module == "PL Builder":
                 )
         except Exception as e:
             st.error(f"Error processing file: {e}")
+            st.write("Please make sure your file is in the correct format (CSV or Excel) and contains the required columns.")
