@@ -15,6 +15,42 @@ import pdfplumber
 import textwrap
 
 # =====================
+# 📁 TEMPLATE FUNCTIONS
+# =====================
+def generate_d2c_template():
+    df = pd.DataFrame(columns=['SKU', 'UPC Code', 'LOT#'])
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='D2C Template')
+    output.seek(0)
+    return output
+
+def generate_fnsku_template():
+    df = pd.DataFrame(columns=['SKU', 'FNSKU', 'Product Name', 'LOT#'])
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='FNSKU Template')
+    output.seek(0)
+    return output
+
+def show_template_download_buttons():
+    st.write("Download Templates for D2C Labels and FNSKU Labels:")
+    d2c_template = generate_d2c_template()
+    st.download_button(
+        label="Download D2C Template",
+        data=d2c_template,
+        file_name="d2c_labels_template.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    fnsku_template = generate_fnsku_template()
+    st.download_button(
+        label="Download FNSKU Template",
+        data=fnsku_template,
+        file_name="fnsku_labels_template.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+# =====================
 # 📁 PL BUILDER MODULE
 # =====================
 def build_pl_base(df, transformation=False):
