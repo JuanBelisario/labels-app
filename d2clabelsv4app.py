@@ -202,12 +202,12 @@ def build_pl_base(df, transformation=False):
     total_qty = int(pd.to_numeric(df['Required Qty'], errors='coerce').sum())
     filename = f"{to} + {so} + {from_loc} + {to_loc} + {total_qty} Units.xlsx"
 
-headers = [
-    "TO", "SO #", "From Loc", "To Loc", "Trafilea SKU", "Destination SKU", "Required Qty",
-    ...
-]
-
-
+    headers = [
+        "TO", "SO #", "From Loc", "To Loc", "Trafilea SKU", "Destination SKU", "Required Qty",
+        "Shipping Method", "FG", "LOT", "Expiration Date", "CARTONS",
+        "UNITS/Ctn", "Total QTY", "Carton Dimensions(inch) ", "Carton WEIGHT-LB",
+        "Pallet Dimensions", "Pallet WEIGHT-LB.", "Pallet #"
+    ]
 
     output_df = pd.DataFrame(columns=headers)
     output_df['TO'] = df['TO']
