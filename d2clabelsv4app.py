@@ -57,29 +57,13 @@ def build_pl_base(df, transformation=False):
         st.error(f"Missing required columns: {', '.join(missing)}")
         return None, None
 
-    # Validate Required Qty
-    errors = []
-    if df['Required Qty'].isnull().any() or not pd.api.types.is_numeric_dtype(df['Required Qty']):
-        errors.append("Required Qty must be numeric and non-null.")
-
-    for field in ['TO', 'FOP SO #', 'From Loc', 'To Loc', 'SKU External ID']:
-        if df[field].isnull().any():
-            errors.append(f"Missing values in '{field}' column.")
-
-    if errors:
-        for err in errors:
-            st.error(err)
-        return None, None
-
-    # Filename
     to = df['TO'].iloc[0]
     so = df['FOP SO #'].iloc[0]
     from_loc = df['From Loc'].iloc[0]
     to_loc = df['To Loc'].iloc[0]
-    total_qty = int(df['Required Qty'].sum())
+    total_qty = int(pd.to_numeric(df['Required Qty'], errors='coerce').sum())
     filename = f"{to} + {so} + {from_loc} + {to_loc} + {total_qty} Units.xlsx"
 
-    # Output headers
     headers = [
         "TO", "SO #", "From Loc", "To Loc", "Trafilea SKU", "Destination SKU", "Required Qty",
         "Shipping Method", "FG", "Trafilea SKU", "LOT", "Expiration Date", "CARTONS",
