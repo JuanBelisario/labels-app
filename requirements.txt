@@ -8,5 +8,5 @@ pdfplumber
 xlsxwriter
 supabase
 Pillow
-xlrd==1.2.0
+xlrd
 
