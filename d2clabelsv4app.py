@@ -301,14 +301,7 @@ elif module == "PL Builder":
         accept_multiple_files=True
     )
 
-    st.markdown(
-        """
-        <a href="https://docs.google.com/forms/d/1O6s1KgjXBl6vVZLsDlJPVleErPro_TXBnG1KYQ1C-mc/edit" target="_blank">
-            <button style='padding: 0.5em 1em; font-size: 16px;'>📧 Fill TO Template | Send Email</button>
-        </a>
-        """,
-        unsafe_allow_html=True
-    )
+
 
     if uploaded_files:
         zip_buffer = BytesIO()
@@ -342,3 +335,11 @@ elif module == "PL Builder":
                 file_name="packing_lists.zip",
                 mime="application/zip"
             )
+    st.markdown(
+        """
+        <a href="https://docs.google.com/forms/d/e/1FAIpQLSfllE2UA33kBQpr5-Nq2tmDwhnYn9DStNyHRcKdONvpw0qTaQ/viewform" target="_blank">
+            <button style='padding: 0.5em 1em; font-size: 16px;'>📧 Fill TO Template | Send Email</button>
+        </a>
+        """,
+        unsafe_allow_html=True
+    )
