@@ -285,25 +285,23 @@ if module == "Labels Generator":
 
 elif module == "PL Builder":
     st.header("📦 Packing List Builder")
-    pl_type = st.selectbox("Select PL Type", ["Normal TO PL", "Transformation TO PL"])
+    st.subheader("Generate PL")
 
-
-
-    # Allow multiple file uploads
     uploaded_files = st.file_uploader(
         "Upload one or more CSV or Excel files",
         type=["csv", "xls", "xlsx"],
         accept_multiple_files=True
     )
-    # Add UI button with external hyperlink
+
     st.markdown(
         """
-        <a href="https://docs.google.com/forms/d/e/1FAIpQLSfllE2UA33kBQpr5-Nq2tmDwhnYn9DStNyHRcKdONvpw0qTaQ/viewform" target="_blank">
+        <a href="https://docs.google.com/forms/d/1O6s1KgjXBl6vVZLsDlJPVleErPro_TXBnG1KYQ1C-mc/edit" target="_blank">
             <button style='padding: 0.5em 1em; font-size: 16px;'>📧 Fill TO Template | Send Email</button>
         </a>
         """,
         unsafe_allow_html=True
     )
+
     if uploaded_files:
         zip_buffer = BytesIO()
         with ZipFile(zip_buffer, 'w') as zip_archive:
@@ -317,7 +315,8 @@ elif module == "PL Builder":
                             engine='openpyxl' if uploaded_file.name.endswith('xlsx') else 'xlrd'
                         )
 
-                    is_transformation = pl_type == "Transformation TO PL"
+                    # Auto-detect PL type
+                    is_transformation = 'Destination SKU' in df.columns
                     output, filename = build_pl_base(df, transformation=is_transformation)
 
                     if output:
@@ -335,4 +334,3 @@ elif module == "PL Builder":
                 file_name="packing_lists.zip",
                 mime="application/zip"
             )
-
