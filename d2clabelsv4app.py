@@ -202,12 +202,16 @@ def build_pl_base(df, transformation=False):
     total_qty = int(pd.to_numeric(df['Required Qty'], errors='coerce').sum())
     filename = f"{to} + {so} + {from_loc} + {to_loc} + {total_qty} Units.xlsx"
 
+    # Base headers
     headers = [
-        "TO", "SO #", "From Loc", "To Loc", "Trafilea SKU", "Destination SKU", "Required Qty",
-        "Shipping Method", "FG", "LOT", "Expiration Date", "CARTONS",
+        "TO", "SO #", "From Loc", "To Loc", "Trafilea SKU", "Required Qty", "Shipping Method",
+        "FG", "LOT", "Expiration Date", "CARTONS",
         "UNITS/Ctn", "Total QTY", "Carton Dimensions(inch) ", "Carton WEIGHT-LB",
         "Pallet Dimensions", "Pallet WEIGHT-LB.", "Pallet #"
     ]
+
+    if transformation:
+        headers.insert(5, "Destination SKU")
 
     output_df = pd.DataFrame(columns=headers)
     output_df['TO'] = df['TO']
@@ -217,6 +221,7 @@ def build_pl_base(df, transformation=False):
     output_df['Trafilea SKU'] = df['SKU External ID']
     output_df['Required Qty'] = df['Required Qty']
     output_df['Shipping Method'] = df['Shipping Method']
+
     if transformation and 'Destination SKU' in df.columns:
         output_df['Destination SKU'] = df['Destination SKU']
 
@@ -225,6 +230,7 @@ def build_pl_base(df, transformation=False):
         output_df.to_excel(writer, index=False, sheet_name='PL')
         workbook = writer.book
         worksheet = writer.sheets['PL']
+
         dark_blue = workbook.add_format({
             'bold': True, 'bg_color': '#0C2D63', 'font_color': 'white',
             'border': 1, 'align': 'center', 'valign': 'vcenter'
@@ -233,12 +239,14 @@ def build_pl_base(df, transformation=False):
             'bold': True, 'bg_color': '#D9EAF7', 'border': 1,
             'align': 'center', 'valign': 'vcenter'
         })
+
         for col_num, col_name in enumerate(output_df.columns):
             header_format = dark_blue if col_name in [
                 "TO", "SO #", "From Loc", "To Loc", "Trafilea SKU", "Destination SKU", "Required Qty", "Shipping Method"
             ] else light_blue
             worksheet.write(0, col_num, col_name, header_format)
             worksheet.set_column(col_num, col_num, 22)
+
     output.seek(0)
     return output, filename
 
