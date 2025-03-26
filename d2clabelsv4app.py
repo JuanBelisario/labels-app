@@ -286,24 +286,53 @@ if module == "Labels Generator":
 elif module == "PL Builder":
     st.header("📦 Packing List Builder")
     pl_type = st.selectbox("Select PL Type", ["Normal TO PL", "Transformation TO PL"])
-    uploaded_file = st.file_uploader("Upload CSV or Excel file", type=["csv", "xls", "xlsx"])
 
-    if uploaded_file is not None:
-        try:
-            if uploaded_file.name.endswith(".csv"):
-                df = pd.read_csv(uploaded_file)
-            else:
-                df = pd.read_excel(uploaded_file, engine='openpyxl' if uploaded_file.name.endswith('xlsx') else 'xlrd')
+    # Add UI button with external hyperlink
+    st.markdown(
+        """
+        <a href="https://docs.google.com/forms/d/1O6s1KgjXBl6vVZLsDlJPVleErPro_TXBnG1KYQ1C-mc/edit" target="_blank">
+            <button style='padding: 0.5em 1em; font-size: 16px;'>📧 Fill TO Template | Send Email</button>
+        </a>
+        """,
+        unsafe_allow_html=True
+    )
 
-            is_transformation = pl_type == "Transformation TO PL"
-            output, filename = build_pl_base(df, transformation=is_transformation)
-            if output:
-                st.success("PL file generated successfully!")
-                st.download_button(
-                    label="📥 Download PL Excel",
-                    data=output,
-                    file_name=filename,
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-        except Exception as e:
-            st.error(f"Error processing file: {e}")
+    # Allow multiple file uploads
+    uploaded_files = st.file_uploader(
+        "Upload one or more CSV or Excel files",
+        type=["csv", "xls", "xlsx"],
+        accept_multiple_files=True
+    )
+
+    if uploaded_files:
+        zip_buffer = BytesIO()
+        with ZipFile(zip_buffer, 'w') as zip_archive:
+            for uploaded_file in uploaded_files:
+                try:
+                    if uploaded_file.name.endswith(".csv"):
+                        df = pd.read_csv(uploaded_file)
+                    else:
+                        df = pd.read_excel(
+                            uploaded_file,
+                            engine='openpyxl' if uploaded_file.name.endswith('xlsx') else 'xlrd'
+                        )
+
+                    is_transformation = pl_type == "Transformation TO PL"
+                    output, filename = build_pl_base(df, transformation=is_transformation)
+
+                    if output:
+                        zip_archive.writestr(filename, output.getvalue())
+
+                except Exception as e:
+                    st.error(f"Error processing file '{uploaded_file.name}': {e}")
+
+        zip_buffer.seek(0)
+        if zip_buffer.getbuffer().nbytes > 0:
+            st.success("All PL files processed successfully!")
+            st.download_button(
+                label="📥 Download All PLs as ZIP",
+                data=zip_buffer,
+                file_name="packing_lists.zip",
+                mime="application/zip"
+            )
+
