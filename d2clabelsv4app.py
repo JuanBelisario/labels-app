@@ -287,15 +287,7 @@ elif module == "PL Builder":
     st.header("📦 Packing List Builder")
     pl_type = st.selectbox("Select PL Type", ["Normal TO PL", "Transformation TO PL"])
 
-    # Add UI button with external hyperlink
-    st.markdown(
-        """
-        <a href="https://docs.google.com/forms/d/1O6s1KgjXBl6vVZLsDlJPVleErPro_TXBnG1KYQ1C-mc/edit" target="_blank">
-            <button style='padding: 0.5em 1em; font-size: 16px;'>📧 Fill TO Template | Send Email</button>
-        </a>
-        """,
-        unsafe_allow_html=True
-    )
+
 
     # Allow multiple file uploads
     uploaded_files = st.file_uploader(
@@ -303,7 +295,15 @@ elif module == "PL Builder":
         type=["csv", "xls", "xlsx"],
         accept_multiple_files=True
     )
-
+    # Add UI button with external hyperlink
+    st.markdown(
+        """
+        <a href="https://docs.google.com/forms/d/e/1FAIpQLSfllE2UA33kBQpr5-Nq2tmDwhnYn9DStNyHRcKdONvpw0qTaQ/viewform" target="_blank">
+            <button style='padding: 0.5em 1em; font-size: 16px;'>📧 Fill TO Template | Send Email</button>
+        </a>
+        """,
+        unsafe_allow_html=True
+    )
     if uploaded_files:
         zip_buffer = BytesIO()
         with ZipFile(zip_buffer, 'w') as zip_archive:
