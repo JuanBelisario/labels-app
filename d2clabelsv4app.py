@@ -69,7 +69,15 @@ def generate_fnsku_barcode(fnsku):
     return f"{barcode_filename}.png"
 
 def generate_d2c_barcode(upc_code, sku):
-    barcode_ean = EAN13(upc_code, writer=ImageWriter())
+    barcode_ean = EAN13(str(upc_code), writer=ImageWriter())
+    barcode_ean.writer.set_options({
+        'module_width': 0.35,
+        'module_height': 16,
+        'font_size': 7.75,
+        'text_distance': 4.5,
+        'quiet_zone': 1.25,
+        'dpi': 600
+    })
     clean_sku = clean_filename(sku)
     barcode_filename = f"{clean_sku}_barcode"
     barcode_ean.save(barcode_filename)
@@ -112,20 +120,20 @@ def generate_label_pdf(sku, upc_code, lot_num, output_path):
     barcode_width = 51.5 * mm
     c.setFont("Helvetica", 9.5)
     c.drawCentredString(width / 2, y_sku, sku)
-    if len(upc_code) == 12:
-        upc_code = '0' + upc_code
+    
     barcode_path = generate_d2c_barcode(upc_code, sku)
     c.drawImage(barcode_path, (width - barcode_width) / 2, y_barcode, width=barcode_width, height=16 * mm)
     os.remove(barcode_path)
+    
     c.setFont("Helvetica", 9)
-    if lot_num:
+    if pd.notna(lot_num) and str(lot_num).strip():
         lot_box_width = 40 * mm
         lot_box_height = 4 * mm
         x_lot_box = (width - lot_box_width) / 2
         y_lot_box = y_lot - 1.125 * mm
         c.setStrokeColorRGB(0, 0, 0)
         c.rect(x_lot_box, y_lot_box, lot_box_width, lot_box_height, stroke=1, fill=0)
-        c.drawCentredString(width / 2, y_lot, lot_num)
+        c.drawCentredString(width / 2, y_lot, str(lot_num).strip())
     c.save()
 
 def generate_pdfs_from_excel(df):
@@ -142,8 +150,8 @@ def generate_pdfs_from_excel(df):
     progress_bar = st.progress(0)
     for index, row in df.iterrows():
         sku = row['SKU']
-        upc_code = str(row['UPC Code']).zfill(12)
-        lot_num = row['LOT#'] if pd.notnull(row['LOT#']) else ""
+        upc_code = str(row['UPC Code']).strip()
+        lot_num = str(row['LOT#']).strip() if pd.notna(row['LOT#']) else ""
         pdf_filename = clean_filename(f"{sku}.pdf")
         pdf_path = os.path.join(output_folder, pdf_filename)
         generate_label_pdf(sku, upc_code, lot_num, pdf_path)
