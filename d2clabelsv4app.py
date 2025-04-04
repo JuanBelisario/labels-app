@@ -105,28 +105,37 @@ def create_fnsku_pdf(barcode_image, fnsku, product_name, lot, output_folder):
 def generate_label_pdf(sku, upc_code, lot_num, output_path):
     width, height = 60 * mm, 35 * mm
     c = canvas.Canvas(output_path, pagesize=(width, height))
+
     x_margin = 4.5 * mm
     y_sku = height - 7.75 * mm
     y_barcode = height / 2 - 8 * mm
     y_lot = 4.75 * mm
     barcode_width = 51.5 * mm
+
     c.setFont("Helvetica", 9.5)
     c.drawCentredString(width / 2, y_sku, sku)
-    if len(upc_code) == 12:
-        upc_code = '0' + upc_code
-    barcode_path = generate_d2c_barcode(upc_code, sku)
+
+    # Remove zero-padding to avoid wrong barcode
+    upc_str = str(upc_code).strip()
+
+    barcode_path = generate_d2c_barcode(upc_str, sku)
     c.drawImage(barcode_path, (width - barcode_width) / 2, y_barcode, width=barcode_width, height=16 * mm)
     os.remove(barcode_path)
+
     c.setFont("Helvetica", 9)
-    if lot_num:
-        lot_box_width = 40 * mm
-        lot_box_height = 4 * mm
-        x_lot_box = (width - lot_box_width) / 2
-        y_lot_box = y_lot - 1.125 * mm
-        c.setStrokeColorRGB(0, 0, 0)
-        c.rect(x_lot_box, y_lot_box, lot_box_width, lot_box_height, stroke=1, fill=0)
-        c.drawCentredString(width / 2, y_lot, lot_num)
+
+    # Always show LOT box, even for 'NA', 'N/A', '-'
+    lot_str = str(lot_num).strip() if pd.notna(lot_num) else ""
+    lot_box_width = 40 * mm
+    lot_box_height = 4 * mm
+    x_lot_box = (width - lot_box_width) / 2
+    y_lot_box = y_lot - 1.125 * mm
+    c.setStrokeColorRGB(0, 0, 0)
+    c.rect(x_lot_box, y_lot_box, lot_box_width, lot_box_height, stroke=1, fill=0)
+    c.drawCentredString(width / 2, y_lot, lot_str)
+
     c.save()
+
 
 def generate_pdfs_from_excel(df):
     required_columns = ['SKU', 'UPC Code', 'LOT#']
