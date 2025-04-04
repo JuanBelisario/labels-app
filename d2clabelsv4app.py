@@ -179,7 +179,7 @@ def generate_pdfs_from_excel(df):
 
     for index, row in df.iterrows():
         sku = row['SKU']
-       raw_upc = str(row['UPC Code']).strip()
+        raw_upc = str(row['UPC Code']).strip()
         upc_code = raw_upc if len(raw_upc) in [11, 12] else raw_upc.zfill(12)
         lot_num = row['LOT#'] if pd.notnull(row['LOT#']) else ""
         pdf_filename = clean_filename(f"{sku}.pdf")
