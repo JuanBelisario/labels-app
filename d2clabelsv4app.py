@@ -69,7 +69,22 @@ def generate_fnsku_barcode(fnsku):
     return f"{barcode_filename}.png"
 
 def generate_d2c_barcode(upc_code, sku):
-    barcode_ean = EAN13(str(upc_code), writer=ImageWriter())
+    # For UPC-12, pad with leading zero to make it EAN-13, but preserve the original check digit
+    if len(str(upc_code)) == 12:
+        upc_code = '0' + str(upc_code)
+    elif len(str(upc_code)) < 12:
+        # Pad with zeros on the left if shorter than 12 digits
+        upc_code = str(upc_code).zfill(12)
+    
+    barcode_ean = EAN13(upc_code, writer=ImageWriter())
+    barcode_ean.writer.set_options({
+        'module_width': 0.35,
+        'module_height': 16,
+        'font_size': 7.75,
+        'text_distance': 4.5,
+        'quiet_zone': 1.25,
+        'dpi': 600
+    })
     clean_sku = clean_filename(sku)
     barcode_filename = f"{clean_sku}_barcode"
     barcode_ean.save(barcode_filename)
@@ -138,20 +153,27 @@ def generate_pdfs_from_excel(df):
     if missing_columns:
         st.error(f"Missing columns in the Excel file: {', '.join(missing_columns)}")
         return None
+    
     first_sku = df.iloc[0]['SKU']
     current_date = datetime.now().strftime("%Y%m%d")
     output_folder = f"{first_sku}_{current_date}"
     os.makedirs(output_folder, exist_ok=True)
+    
     total_rows = len(df)
     progress_bar = st.progress(0)
+    
     for index, row in df.iterrows():
         sku = row['SKU']
-        upc_code = str(row['UPC Code']).zfill(12)
-        lot_num = row['LOT#'] if pd.notnull(row['LOT#']) else ""
+        upc_code = str(row['UPC Code'])  # Don't zfill here, handle in generate_d2c_barcode
+        
+        # Handle LOT# - preserve NA, N/A, or any other value
+        lot_num = str(row['LOT#']) if pd.notna(row['LOT#']) else ""
+        
         pdf_filename = clean_filename(f"{sku}.pdf")
         pdf_path = os.path.join(output_folder, pdf_filename)
         generate_label_pdf(sku, upc_code, lot_num, pdf_path)
         progress_bar.progress((index + 1) / total_rows)
+    
     zip_filename = f"{output_folder}.zip"
     with ZipFile(zip_filename, 'w') as zipObj:
         for folder_name, subfolders, filenames in os.walk(output_folder):
