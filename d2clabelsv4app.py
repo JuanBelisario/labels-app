@@ -69,7 +69,16 @@ def generate_fnsku_barcode(fnsku):
     return f"{barcode_filename}.png"
 
 def generate_d2c_barcode(upc_code, sku):
-    barcode_ean = EAN13(str(upc_code), writer=ImageWriter())
+    # Clean and pad the UPC code to exactly 12 digits
+    upc_str = str(upc_code).strip()
+    if len(upc_str) < 12:
+        # If less than 12 digits, pad with zeros on the left
+        upc_str = upc_str.zfill(12)
+    elif len(upc_str) > 12:
+        # If more than 12 digits, take the rightmost 12 digits
+        upc_str = upc_str[-12:]
+    
+    barcode_ean = EAN13('0' + upc_str, writer=ImageWriter())  # Add leading 0 for EAN13
     barcode_ean.writer.set_options({
         'module_width': 0.35,
         'module_height': 16,
@@ -118,13 +127,21 @@ def generate_label_pdf(sku, upc_code, lot_num, output_path):
     y_barcode = height / 2 - 8 * mm
     y_lot = 4.75 * mm
     barcode_width = 51.5 * mm
+    
+    # Draw SKU at top
     c.setFont("Helvetica", 9.5)
     c.drawCentredString(width / 2, y_sku, sku)
     
+    # Draw original UPC code above barcode
+    c.setFont("Helvetica", 9)
+    c.drawCentredString(width / 2, y_barcode + 18 * mm, str(upc_code).strip())
+    
+    # Generate and draw barcode
     barcode_path = generate_d2c_barcode(upc_code, sku)
     c.drawImage(barcode_path, (width - barcode_width) / 2, y_barcode, width=barcode_width, height=16 * mm)
     os.remove(barcode_path)
     
+    # Draw LOT box and number
     c.setFont("Helvetica", 9)
     if pd.notna(lot_num) and str(lot_num).strip():
         lot_box_width = 40 * mm
@@ -134,6 +151,7 @@ def generate_label_pdf(sku, upc_code, lot_num, output_path):
         c.setStrokeColorRGB(0, 0, 0)
         c.rect(x_lot_box, y_lot_box, lot_box_width, lot_box_height, stroke=1, fill=0)
         c.drawCentredString(width / 2, y_lot, str(lot_num).strip())
+    
     c.save()
 
 def generate_pdfs_from_excel(df):
