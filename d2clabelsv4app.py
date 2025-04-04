@@ -69,21 +69,19 @@ def generate_fnsku_barcode(fnsku):
     return f"{barcode_filename}.png"
 
 def generate_d2c_barcode(upc_code, sku):
-    # For UPC-12, pad with leading zero to make it EAN-13, but preserve the original check digit
-    if len(str(upc_code)) == 12:
-        upc_code = '0' + str(upc_code)
-    elif len(str(upc_code)) < 12:
-        # Pad with zeros on the left if shorter than 12 digits
-        upc_code = str(upc_code).zfill(12)
+    # Convert to string and remove any leading zeros
+    upc_str = str(upc_code).lstrip('0')
     
-    barcode_ean = EAN13(upc_code, writer=ImageWriter())
+    # Create barcode with exact UPC without modifications
+    barcode_ean = EAN13(upc_str.zfill(12), writer=ImageWriter())
     barcode_ean.writer.set_options({
         'module_width': 0.35,
         'module_height': 16,
         'font_size': 7.75,
         'text_distance': 4.5,
         'quiet_zone': 1.25,
-        'dpi': 600
+        'dpi': 600,
+        'text': upc_str  # Force display of original UPC
     })
     clean_sku = clean_filename(sku)
     barcode_filename = f"{clean_sku}_barcode"
@@ -136,14 +134,15 @@ def generate_label_pdf(sku, upc_code, lot_num, output_path):
     os.remove(barcode_path)
 
     c.setFont("Helvetica", 9)
-    if pd.notna(lot_num):
+    # Always show LOT box and number for any non-empty value
+    if lot_num and str(lot_num).strip():
         lot_box_width = 40 * mm
         lot_box_height = 4 * mm
         x_lot_box = (width - lot_box_width) / 2
         y_lot_box = y_lot - 1.125 * mm
         c.setStrokeColorRGB(0, 0, 0)
         c.rect(x_lot_box, y_lot_box, lot_box_width, lot_box_height, stroke=1, fill=0)
-        c.drawCentredString(width / 2, y_lot, str(lot_num))
+        c.drawCentredString(width / 2, y_lot, str(lot_num).strip())
 
     c.save()
 
@@ -164,10 +163,14 @@ def generate_pdfs_from_excel(df):
     
     for index, row in df.iterrows():
         sku = row['SKU']
-        upc_code = str(row['UPC Code'])  # Don't zfill here, handle in generate_d2c_barcode
+        upc_code = str(row['UPC Code']).strip()  # Remove any whitespace
         
-        # Handle LOT# - preserve NA, N/A, or any other value
-        lot_num = str(row['LOT#']) if pd.notna(row['LOT#']) else ""
+        # Explicitly handle LOT# to preserve values like "NA" or "N/A"
+        lot_num = row['LOT#']
+        if pd.isna(lot_num):  # Only convert to empty string if it's actually NaN
+            lot_num = ""
+        else:
+            lot_num = str(lot_num).strip()
         
         pdf_filename = clean_filename(f"{sku}.pdf")
         pdf_path = os.path.join(output_folder, pdf_filename)
