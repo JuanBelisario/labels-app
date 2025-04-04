@@ -1,5 +1,3 @@
-# ✅ FIXED VERSION: PL Builder module added, label logic preserved untouched from original version.
-
 # TOs Hub - Streamlit App with Labels Generator + PL Builder
 import streamlit as st
 import pandas as pd
@@ -8,16 +6,14 @@ import re
 from io import BytesIO
 from reportlab.lib.pagesizes import mm
 from reportlab.pdfgen import canvas
-from barcode import EAN13, Code128
+from barcode import Code128
 from barcode.writer import ImageWriter
 from datetime import datetime
 from zipfile import ZipFile
 from PyPDF2 import PdfReader, PdfWriter
-import pdfplumber
 import textwrap
 
-# --- ORIGINAL LABEL LOGIC STARTS HERE (UNCHANGED) ---
-
+# ---------- LABEL TEMPLATES ----------
 def generate_d2c_template():
     df = pd.DataFrame(columns=['SKU', 'UPC Code', 'LOT#'])
     output = BytesIO()
@@ -36,58 +32,26 @@ def generate_fnsku_template():
 
 def show_template_download_buttons():
     st.write("Download Templates for D2C Labels and FNSKU Labels:")
-    d2c_template = generate_d2c_template()
-    st.download_button(
-        label="Download D2C Template",
-        data=d2c_template,
-        file_name="d2c_labels_template.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-    fnsku_template = generate_fnsku_template()
-    st.download_button(
-        label="Download FNSKU Template",
-        data=fnsku_template,
-        file_name="fnsku_labels_template.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+    st.download_button("Download D2C Template", generate_d2c_template(), "d2c_labels_template.xlsx")
+    st.download_button("Download FNSKU Template", generate_fnsku_template(), "fnsku_labels_template.xlsx")
 
+# ---------- BARCODE UTILITIES ----------
 def clean_filename(name):
     return re.sub(r'[<>:"/\\|?*]', '', name)
 
-def generate_fnsku_barcode(fnsku):
-    fnsku_barcode = Code128(fnsku, writer=ImageWriter())
-    fnsku_barcode.writer.set_options({
-        'module_width': 0.35,
-        'module_height': 16,
-        'font_size': 7.75,
-        'text_distance': 4.5,
-        'quiet_zone': 1.25,
-        'dpi': 600
-    })
-    barcode_filename = f"{fnsku}_barcode"
-    fnsku_barcode.save(barcode_filename)
-    return f"{barcode_filename}.png"
-
 def generate_d2c_barcode(upc_code, sku):
-    # Convert to string and remove any leading zeros
-    upc_str = str(upc_code).lstrip('0')
-    
-    # Create barcode with exact UPC without modifications
-    barcode_ean = EAN13(upc_str.zfill(12), writer=ImageWriter())
-    barcode_ean.writer.set_options({
-        'module_width': 0.35,
-        'module_height': 16,
-        'font_size': 7.75,
-        'text_distance': 4.5,
-        'quiet_zone': 1.25,
-        'dpi': 600,
-        'text': upc_str  # Force display of original UPC
-    })
-    clean_sku = clean_filename(sku)
-    barcode_filename = f"{clean_sku}_barcode"
-    barcode_ean.save(barcode_filename)
+    barcode = Code128(str(upc_code), writer=ImageWriter())
+    barcode_filename = clean_filename(sku) + "_barcode"
+    barcode.save(barcode_filename)
+    return barcode_filename + ".png"
+
+def generate_fnsku_barcode(fnsku):
+    barcode = Code128(fnsku, writer=ImageWriter())
+    barcode_filename = f"{fnsku}_barcode"
+    barcode.save(barcode_filename)
     return f"{barcode_filename}.png"
 
+# ---------- PDF RENDERING ----------
 def wrap_text_to_two_lines(text, max_length, c, start_x, start_y, line_height, max_width):
     text = str(text) if pd.notna(text) else ""
     if len(text) > 2 * max_length:
@@ -95,121 +59,70 @@ def wrap_text_to_two_lines(text, max_length, c, start_x, start_y, line_height, m
     else:
         text_to_display = text
     lines = textwrap.wrap(text_to_display, width=25)
-    if len(lines) > 2:
-        lines = lines[:2]
+    lines = lines[:2] if len(lines) > 2 else lines
     for i, line in enumerate(lines):
         c.drawString(start_x, start_y - i * line_height, line)
 
 def create_fnsku_pdf(barcode_image, fnsku, product_name, lot, output_folder):
-    pdf_filename = os.path.join(output_folder, f"{fnsku}_fnsku_label.pdf")
-    c = canvas.Canvas(pdf_filename, pagesize=(60 * mm, 35 * mm))
+    c = canvas.Canvas(os.path.join(output_folder, f"{fnsku}_fnsku_label.pdf"), pagesize=(60 * mm, 35 * mm))
     c.drawImage(barcode_image, 4.5 * mm, 10 * mm, width=51.5 * mm, height=16 * mm)
-    font_size = 9
-    c.setFont("Helvetica", font_size)
+    c.setFont("Helvetica", 9)
     if product_name:
-        wrap_text_to_two_lines(product_name, max_length=22, c=c, start_x=5 * mm, start_y=7.75 * mm, line_height=font_size - 1.5, max_width=25)
-    if lot:
-        c.drawString(5 * mm, 3.5 * mm, f"Lot: {lot}")
+        wrap_text_to_two_lines(product_name, 22, c, 5 * mm, 7.75 * mm, 7.5, 25)
+    if lot is not None:
+        c.drawString(5 * mm, 3.5 * mm, f"Lot: {str(lot).strip()}")
     c.showPage()
     c.save()
-    if os.path.exists(barcode_image):
-        os.remove(barcode_image)
+    os.remove(barcode_image)
 
 def generate_label_pdf(sku, upc_code, lot_num, output_path):
-    width, height = 60 * mm, 35 * mm
-    c = canvas.Canvas(output_path, pagesize=(width, height))
-
-    x_margin = 4.5 * mm
-    y_sku = height - 7.75 * mm
-    y_barcode = height / 2 - 8 * mm
-    y_lot = 4.75 * mm
-    barcode_width = 51.5 * mm
-
+    c = canvas.Canvas(output_path, pagesize=(60 * mm, 35 * mm))
     c.setFont("Helvetica", 9.5)
-    c.drawCentredString(width / 2, y_sku, sku)
+    c.drawCentredString(30 * mm, 27.25 * mm, sku)
 
     barcode_path = generate_d2c_barcode(upc_code, sku)
-
-    c.drawImage(barcode_path, (width - barcode_width) / 2, y_barcode, width=barcode_width, height=16 * mm)
+    c.drawImage(barcode_path, 4.5 * mm, 9 * mm, width=51.5 * mm, height=16 * mm)
     os.remove(barcode_path)
 
     c.setFont("Helvetica", 9)
-    # Always show LOT box and number for any non-empty value
-    if lot_num and str(lot_num).strip():
-        lot_box_width = 40 * mm
-        lot_box_height = 4 * mm
-        x_lot_box = (width - lot_box_width) / 2
-        y_lot_box = y_lot - 1.125 * mm
-        c.setStrokeColorRGB(0, 0, 0)
-        c.rect(x_lot_box, y_lot_box, lot_box_width, lot_box_height, stroke=1, fill=0)
-        c.drawCentredString(width / 2, y_lot, str(lot_num).strip())
-
+    lot_text = str(lot_num).strip() if lot_num is not None else ""
+    c.setStrokeColorRGB(0, 0, 0)
+    c.rect(10 * mm, 3.625 * mm, 40 * mm, 4 * mm, stroke=1, fill=0)
+    c.drawCentredString(30 * mm, 4.75 * mm, lot_text)
     c.save()
 
+# ---------- GENERATE PDFs ----------
 def generate_pdfs_from_excel(df):
-    required_columns = ['SKU', 'UPC Code', 'LOT#']
-    missing_columns = [col for col in required_columns if col not in df.columns]
-    if missing_columns:
-        st.error(f"Missing columns in the Excel file: {', '.join(missing_columns)}")
+    if any(col not in df.columns for col in ['SKU', 'UPC Code', 'LOT#']):
+        st.error("Missing required columns in uploaded file.")
         return None
-    
-    first_sku = df.iloc[0]['SKU']
-    current_date = datetime.now().strftime("%Y%m%d")
-    output_folder = f"{first_sku}_{current_date}"
-    os.makedirs(output_folder, exist_ok=True)
-    
-    total_rows = len(df)
-    progress_bar = st.progress(0)
-    
-    for index, row in df.iterrows():
-        sku = row['SKU']
-        upc_code = str(row['UPC Code']).strip()  # Remove any whitespace
-        
-        # Explicitly handle LOT# to preserve values like "NA" or "N/A"
-        lot_num = row['LOT#']
-        if pd.isna(lot_num):  # Only convert to empty string if it's actually NaN
-            lot_num = ""
-        else:
-            lot_num = str(lot_num).strip()
-        
-        pdf_filename = clean_filename(f"{sku}.pdf")
-        pdf_path = os.path.join(output_folder, pdf_filename)
-        generate_label_pdf(sku, upc_code, lot_num, pdf_path)
-        progress_bar.progress((index + 1) / total_rows)
-    
-    zip_filename = f"{output_folder}.zip"
-    with ZipFile(zip_filename, 'w') as zipObj:
-        for folder_name, subfolders, filenames in os.walk(output_folder):
-            for filename in filenames:
-                filepath = os.path.join(folder_name, filename)
-                zipObj.write(filepath, os.path.basename(filepath))
-    return zip_filename
+    folder = f"{df.iloc[0]['SKU']}_{datetime.now().strftime('%Y%m%d')}"
+    os.makedirs(folder, exist_ok=True)
+    progress = st.progress(0)
+    for idx, row in df.iterrows():
+        generate_label_pdf(row['SKU'], row['UPC Code'], row['LOT#'], os.path.join(folder, clean_filename(f"{row['SKU']}.pdf")))
+        progress.progress((idx + 1) / len(df))
+    zip_path = folder + ".zip"
+    with ZipFile(zip_path, 'w') as z:
+        for file in os.listdir(folder):
+            z.write(os.path.join(folder, file), file)
+    return zip_path
 
 def generate_fnsku_labels_from_excel(df):
-    first_fnsku = df.iloc[0]['FNSKU']
-    current_date = datetime.now().strftime("%Y%m%d")
-    output_folder = f"{first_fnsku}_{current_date}"
-    os.makedirs(output_folder, exist_ok=True)
-    total_rows = len(df)
-    progress_bar = st.progress(0)
-    for index, row in df.iterrows():
-        fnsku = str(row['FNSKU']) if pd.notna(row['FNSKU']) else ""
-        product_name = str(row['Product Name']) if pd.notna(row['Product Name']) else ""
-        lot = str(row['LOT#']) if pd.notna(row['LOT#']) else ""
-        barcode_image = generate_fnsku_barcode(fnsku)
-        create_fnsku_pdf(barcode_image, fnsku, product_name, lot, output_folder)
-        progress_bar.progress((index + 1) / total_rows)
-    zip_filename = f"{output_folder}.zip"
-    with ZipFile(zip_filename, 'w') as zipObj:
-        for folder_name, subfolders, filenames in os.walk(output_folder):
-            for filename in filenames:
-                if "_fnsku_label" in filename:
-                    filepath = os.path.join(folder_name, filename)
-                    zipObj.write(filepath, os.path.basename(filepath))
-    return zip_filename
-
-# --- PL BUILDER STARTS HERE ---
-
+    folder = f"{df.iloc[0]['FNSKU']}_{datetime.now().strftime('%Y%m%d')}"
+    os.makedirs(folder, exist_ok=True)
+    progress = st.progress(0)
+    for idx, row in df.iterrows():
+        barcode_img = generate_fnsku_barcode(row['FNSKU'])
+        create_fnsku_pdf(barcode_img, row['FNSKU'], row['Product Name'], row['LOT#'], folder)
+        progress.progress((idx + 1) / len(df))
+    zip_path = folder + ".zip"
+    with ZipFile(zip_path, 'w') as z:
+        for file in os.listdir(folder):
+            if "_fnsku_label" in file:
+                z.write(os.path.join(folder, file), file)
+    return zip_path
+# ---------- PL BUILDER ----------
 def build_pl_base(df, transformation=False):
     df = df.copy()
     required_cols = [
@@ -231,12 +144,11 @@ def build_pl_base(df, transformation=False):
     total_qty = int(pd.to_numeric(df['Required Qty'], errors='coerce').sum())
     filename = f"{to} + {so} + {from_loc} + {to_loc} + {total_qty} Units.xlsx"
 
-    # Base headers
     headers = [
-        "TO", "SO #", "From Loc", "To Loc", "Trafilea SKU", "Required Qty", "Shipping Method",
-        "FG", "LOT", "Expiration Date", "CARTONS",
-        "UNITS/Ctn", "Total QTY", "Carton Dimensions(inch) ", "Carton WEIGHT-LB",
-        "Pallet Dimensions", "Pallet WEIGHT-LB.", "Pallet #"
+        "TO", "SO #", "From Loc", "To Loc", "Trafilea SKU",
+        "Required Qty", "Shipping Method", "FG", "LOT", "Expiration Date", "CARTONS",
+        "UNITS/Ctn", "Total QTY", "Carton Dimensions(inch) ",
+        "Carton WEIGHT-LB", "Pallet Dimensions", "Pallet WEIGHT-LB.", "Pallet #"
     ]
 
     if transformation:
@@ -250,8 +162,7 @@ def build_pl_base(df, transformation=False):
     output_df['Trafilea SKU'] = df['SKU External ID']
     output_df['Required Qty'] = df['Required Qty']
     output_df['Shipping Method'] = df['Shipping Method']
-
-    if transformation and 'Destination SKU' in df.columns:
+    if transformation:
         output_df['Destination SKU'] = df['Destination SKU']
 
     output = BytesIO()
@@ -259,28 +170,16 @@ def build_pl_base(df, transformation=False):
         output_df.to_excel(writer, index=False, sheet_name='PL')
         workbook = writer.book
         worksheet = writer.sheets['PL']
-
-        dark_blue = workbook.add_format({
-            'bold': True, 'bg_color': '#0C2D63', 'font_color': 'white',
-            'border': 1, 'align': 'center', 'valign': 'vcenter'
-        })
-        light_blue = workbook.add_format({
-            'bold': True, 'bg_color': '#D9EAF7', 'border': 1,
-            'align': 'center', 'valign': 'vcenter'
-        })
-
+        dark_blue = workbook.add_format({'bold': True, 'bg_color': '#0C2D63', 'font_color': 'white', 'border': 1})
+        light_blue = workbook.add_format({'bold': True, 'bg_color': '#D9EAF7', 'border': 1})
         for col_num, col_name in enumerate(output_df.columns):
-            header_format = dark_blue if col_name in [
-                "TO", "SO #", "From Loc", "To Loc", "Trafilea SKU", "Destination SKU", "Required Qty", "Shipping Method"
-            ] else light_blue
-            worksheet.write(0, col_num, col_name, header_format)
+            fmt = dark_blue if col_name in ["TO", "SO #", "From Loc", "To Loc", "Trafilea SKU", "Destination SKU", "Required Qty", "Shipping Method"] else light_blue
+            worksheet.write(0, col_num, col_name, fmt)
             worksheet.set_column(col_num, col_num, 22)
-
     output.seek(0)
     return output, filename
 
-# --- STREAMLIT APP UI ---
-
+# ---------- STREAMLIT UI ----------
 st.set_page_config(page_title="TOs Hub", layout="wide")
 st.title("TOs Hub")
 
@@ -290,7 +189,7 @@ module = st.sidebar.radio("Go to:", ["Labels Generator", "PL Builder"])
 if module == "Labels Generator":
     st.header("Labels Generator")
     show_template_download_buttons()
-    option = st.selectbox("Choose an action", ["Generate D2C Labels", "Generate FNSKU Labels"], key="action_select")
+    option = st.selectbox("Choose an action", ["Generate D2C Labels", "Generate FNSKU Labels"])
 
     if option == "Generate D2C Labels":
         st.write("Upload an Excel file with SKU, UPC, and LOT# (if applicable)")
@@ -298,7 +197,7 @@ if module == "Labels Generator":
         if uploaded_file is not None:
             try:
                 df = pd.read_excel(uploaded_file, engine='openpyxl' if uploaded_file.name.endswith('xlsx') else 'xlrd')
-                if st.button("Generate D2C Labels", key="generate_d2c_labels"):
+                if st.button("Generate D2C Labels"):
                     zip_path = generate_pdfs_from_excel(df)
                     if zip_path:
                         with open(zip_path, "rb") as f:
@@ -307,12 +206,12 @@ if module == "Labels Generator":
                 st.error(f"Error reading the Excel file: {e}")
 
     elif option == "Generate FNSKU Labels":
-        st.write("Upload an Excel file with SKU, FNSKU, and LOT# (if applicable)")
+        st.write("Upload an Excel file with FNSKU, Product Name, and LOT#")
         uploaded_file = st.file_uploader("Upload Excel file", type=["xlsx", "xls"], key="excel_fnsku_uploader")
         if uploaded_file is not None:
             try:
                 df = pd.read_excel(uploaded_file, engine='openpyxl' if uploaded_file.name.endswith('xlsx') else 'xlrd')
-                if st.button("Generate FNSKU Labels", key="generate_fnsku_labels"):
+                if st.button("Generate FNSKU Labels"):
                     zip_path = generate_fnsku_labels_from_excel(df)
                     if zip_path:
                         with open(zip_path, "rb") as f:
@@ -330,8 +229,6 @@ elif module == "PL Builder":
         accept_multiple_files=True
     )
 
-
-
     if uploaded_files:
         zip_buffer = BytesIO()
         with ZipFile(zip_buffer, 'w') as zip_archive:
@@ -340,12 +237,8 @@ elif module == "PL Builder":
                     if uploaded_file.name.endswith(".csv"):
                         df = pd.read_csv(uploaded_file)
                     else:
-                        df = pd.read_excel(
-                            uploaded_file,
-                            engine='openpyxl' if uploaded_file.name.endswith('xlsx') else 'xlrd'
-                        )
+                        df = pd.read_excel(uploaded_file, engine='openpyxl' if uploaded_file.name.endswith('xlsx') else 'xlrd')
 
-                    # Auto-detect PL type
                     is_transformation = 'Destination SKU' in df.columns
                     output, filename = build_pl_base(df, transformation=is_transformation)
 
@@ -364,6 +257,7 @@ elif module == "PL Builder":
                 file_name="packing_lists.zip",
                 mime="application/zip"
             )
+
     st.markdown(
         """
         <a href="https://docs.google.com/forms/d/e/1FAIpQLSfllE2UA33kBQpr5-Nq2tmDwhnYn9DStNyHRcKdONvpw0qTaQ/viewform" target="_blank">
