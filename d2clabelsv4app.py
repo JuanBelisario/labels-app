@@ -8,7 +8,7 @@ import re
 from io import BytesIO
 from reportlab.lib.pagesizes import mm
 from reportlab.pdfgen import canvas
-from barcode import EAN13, Code128
+from barcode import Code128
 from barcode.writer import ImageWriter
 from datetime import datetime
 from zipfile import ZipFile
@@ -69,11 +69,12 @@ def generate_fnsku_barcode(fnsku):
     return f"{barcode_filename}.png"
 
 def generate_d2c_barcode(upc_code, sku):
-    barcode_ean = EAN13(upc_code, writer=ImageWriter())
+    barcode = Code128(str(upc_code), writer=ImageWriter())
     clean_sku = clean_filename(sku)
     barcode_filename = f"{clean_sku}_barcode"
-    barcode_ean.save(barcode_filename)
+    barcode.save(barcode_filename)
     return f"{barcode_filename}.png"
+
 
 def wrap_text_to_two_lines(text, max_length, c, start_x, start_y, line_height, max_width):
     text = str(text) if pd.notna(text) else ""
