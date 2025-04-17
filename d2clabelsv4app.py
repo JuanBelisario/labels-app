@@ -301,40 +301,36 @@ elif module == "PL Builder":
         accept_multiple_files=True
     )
 
-
-
     if uploaded_files:
-        zip_buffer = BytesIO()
-        with ZipFile(zip_buffer, 'w') as zip_archive:
-            for uploaded_file in uploaded_files:
-                try:
-                    if uploaded_file.name.endswith(".csv"):
-                        df = pd.read_csv(uploaded_file)
-                    else:
-                        df = pd.read_excel(
-                            uploaded_file,
-                            engine='openpyxl' if uploaded_file.name.endswith('xlsx') else 'xlrd'
+        st.success(f"{len(uploaded_files)} file(s) uploaded successfully.")
+        st.markdown("### 📝 Processed Packing Lists")
+
+        for uploaded_file in uploaded_files:
+            try:
+                if uploaded_file.name.endswith(".csv"):
+                    df = pd.read_csv(uploaded_file)
+                else:
+                    df = pd.read_excel(
+                        uploaded_file,
+                        engine='openpyxl' if uploaded_file.name.endswith('xlsx') else 'xlrd'
+                    )
+
+                is_transformation = 'Destination SKU' in df.columns
+                output, filename = build_pl_base(df, transformation=is_transformation)
+
+                if output:
+                    with st.container():
+                        st.markdown(f"<p style='margin-bottom: 0;'><strong>📄 {filename}</strong></p>", unsafe_allow_html=True)
+                        st.download_button(
+                            label="⬇️ Download PL Excel",
+                            data=output,
+                            file_name=filename,
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key=filename,
+                            use_container_width=True
                         )
-
-                    # Auto-detect PL type
-                    is_transformation = 'Destination SKU' in df.columns
-                    output, filename = build_pl_base(df, transformation=is_transformation)
-
-                    if output:
-                        zip_archive.writestr(filename, output.getvalue())
-
-                except Exception as e:
-                    st.error(f"Error processing file '{uploaded_file.name}': {e}")
-
-        zip_buffer.seek(0)
-        if zip_buffer.getbuffer().nbytes > 0:
-            st.success("All PL files processed successfully!")
-            st.download_button(
-                label="📥 Download All PLs as ZIP",
-                data=zip_buffer,
-                file_name="packing_lists.zip",
-                mime="application/zip"
-            )
+            except Exception as e:
+                st.error(f"❌ Error processing file '{uploaded_file.name}': {e}")
     st.markdown(
         """
         <a href="https://docs.google.com/forms/d/e/1FAIpQLSelQ08zk5O1py2t5czsuW4jnpVYO22LAtMskBxlbk__WuRgmA/viewform" target="_blank">
