@@ -15,6 +15,24 @@ from zipfile import ZipFile
 from PyPDF2 import PdfReader, PdfWriter
 import pdfplumber
 import textwrap
+import difflib  # 🔁 ADD THIS NEW IMPORT
+
+# 🔧 ADD THIS FUNCTION BELOW THE IMPORTS
+def normalize_column_names(df):
+    """
+    Identifies and renames fuzzy matches to 'Destination SKU'.
+    Accepts variations like 'destination sku', 'dest_sku', 'DestinationSKU', etc.
+    """
+    col_map = {col: col.strip().lower().replace(" ", "").replace("_", "") for col in df.columns}
+    target = "destinationsku"
+    match = difflib.get_close_matches(target, col_map.values(), n=1, cutoff=0.8)
+    if match:
+        for original_col, normalized in col_map.items():
+            if normalized == match[0]:
+                df.rename(columns={original_col: "Destination SKU"}, inplace=True)
+                break
+    return df
+
 
 # --- ORIGINAL LABEL LOGIC STARTS HERE (UNCHANGED) ---
 
@@ -315,8 +333,10 @@ elif module == "PL Builder":
                         engine='openpyxl' if uploaded_file.name.endswith('xlsx') else 'xlrd'
                     )
 
+                df = normalize_column_names(df)  # ⬅️ Normalize fuzzy column names first
                 is_transformation = 'Destination SKU' in df.columns
                 output, filename = build_pl_base(df, transformation=is_transformation)
+
 
                 if output:
                     with st.container():
