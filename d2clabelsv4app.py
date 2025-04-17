@@ -17,21 +17,32 @@ import pdfplumber
 import textwrap
 import difflib  # 🔁 ADD THIS NEW IMPORT
 
-# 🔧 ADD THIS FUNCTION BELOW THE IMPORTS
 def normalize_column_names(df):
     """
-    Identifies and renames fuzzy matches to 'Destination SKU'.
-    Accepts variations like 'destination sku', 'dest_sku', 'DestinationSKU', etc.
+    Identifies and renames variations of 'Destination SKU' to a standard column name.
+    Accepts: 'destination sku', 'DestinationSKU', 'dest_sku', 'destinationsku', etc.
     """
-    col_map = {col: col.strip().lower().replace(" ", "").replace("_", "") for col in df.columns}
-    target = "destinationsku"
-    match = difflib.get_close_matches(target, col_map.values(), n=1, cutoff=0.8)
+    target_normalized = "destinationsku"
+
+    for col in df.columns:
+        col_normalized = col.strip().lower().replace(" ", "").replace("_", "")
+        if target_normalized in col_normalized:
+            df.rename(columns={col: "Destination SKU"}, inplace=True)
+            return df
+
+    # Fallback: fuzzy match if substring wasn't enough
+    import difflib
+    normalized_map = {col: col.strip().lower().replace(" ", "").replace("_", "") for col in df.columns}
+    match = difflib.get_close_matches(target_normalized, normalized_map.values(), n=1, cutoff=0.75)
+
     if match:
-        for original_col, normalized in col_map.items():
+        for original_col, normalized in normalized_map.items():
             if normalized == match[0]:
                 df.rename(columns={original_col: "Destination SKU"}, inplace=True)
                 break
+
     return df
+
 
 
 # --- ORIGINAL LABEL LOGIC STARTS HERE (UNCHANGED) ---
