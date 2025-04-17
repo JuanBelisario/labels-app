@@ -301,9 +301,7 @@ elif module == "PL Builder":
         accept_multiple_files=True
     )
 
-
-
-    ifif uploaded_files:
+    if uploaded_files:
         st.success(f"{len(uploaded_files)} file(s) uploaded successfully.")
         st.markdown("### 📝 Processed Packing Lists")
 
@@ -321,13 +319,13 @@ elif module == "PL Builder":
                 output, filename = build_pl_base(df, transformation=is_transformation)
 
                 if output:
-                    st.markdown(f"**✅ {uploaded_file.name} → {filename}**")
+                    st.markdown(f"**📄 {filename}**")
                     st.download_button(
                         label="⬇️ Download PL Excel",
                         data=output,
                         file_name=filename,
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key=filename  # Ensures each button is unique
+                        key=filename  # Unique key per download
                     )
                     st.divider()
             except Exception as e:
