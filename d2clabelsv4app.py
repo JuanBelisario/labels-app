@@ -303,7 +303,7 @@ elif module == "PL Builder":
 
     if uploaded_files:
         st.success(f"{len(uploaded_files)} file(s) uploaded successfully.")
-        st.markdown("## 📥 Your Downloadable Packing Lists")
+        st.markdown("### 📝 Processed Packing Lists")
 
         for uploaded_file in uploaded_files:
             try:
@@ -320,24 +320,15 @@ elif module == "PL Builder":
 
                 if output:
                     with st.container():
-                        st.markdown("---", unsafe_allow_html=True)
-                        cols = st.columns([0.1, 0.9])
-                        with cols[0]:
-                            st.markdown("📄", unsafe_allow_html=True)
-                        with cols[1]:
-                            st.markdown(
-                                f"<p style='font-weight:600; margin-bottom:0.2em; font-size:1.05rem;'>{filename}</p>",
-                                unsafe_allow_html=True
-                            )
-                            st.download_button(
-                                label="⬇️ Download PL Excel",
-                                data=output,
-                                file_name=filename,
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                key=filename,
-                                use_container_width=True
-                            )
-
+                        st.markdown(f"<p style='margin-bottom: 0;'><strong>📄 {filename}</strong></p>", unsafe_allow_html=True)
+                        st.download_button(
+                            label="⬇️ Download PL Excel",
+                            data=output,
+                            file_name=filename,
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key=filename,
+                            use_container_width=True
+                        )
             except Exception as e:
                 st.error(f"❌ Error processing file '{uploaded_file.name}': {e}")
                 
