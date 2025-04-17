@@ -319,15 +319,16 @@ elif module == "PL Builder":
                 output, filename = build_pl_base(df, transformation=is_transformation)
 
                 if output:
-                    st.markdown(f"**📄 {filename}**")
-                    st.download_button(
-                        label="⬇️ Download PL Excel",
-                        data=output,
-                        file_name=filename,
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key=filename  # Unique key per download
-                    )
-                    st.divider()
+                    with st.container():
+                        st.markdown(f"<p style='margin-bottom: 0;'><strong>📄 {filename}</strong></p>", unsafe_allow_html=True)
+                        st.download_button(
+                            label="⬇️ Download PL Excel",
+                            data=output,
+                            file_name=filename,
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key=filename,
+                            use_container_width=True
+                        )
             except Exception as e:
                 st.error(f"❌ Error processing file '{uploaded_file.name}': {e}")
                 
