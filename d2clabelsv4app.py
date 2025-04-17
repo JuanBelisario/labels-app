@@ -303,41 +303,39 @@ elif module == "PL Builder":
 
 
 
-    if uploaded_files:
-        zip_buffer = BytesIO()
-        with ZipFile(zip_buffer, 'w') as zip_archive:
-            for uploaded_file in uploaded_files:
-                try:
-                    if uploaded_file.name.endswith(".csv"):
-                        df = pd.read_csv(uploaded_file)
-                    else:
-                        df = pd.read_excel(
-                            uploaded_file,
-                            engine='openpyxl' if uploaded_file.name.endswith('xlsx') else 'xlrd'
-                        )
+    ifif uploaded_files:
+        st.success(f"{len(uploaded_files)} file(s) uploaded successfully.")
+        st.markdown("### 📝 Processed Packing Lists")
 
-                    # Auto-detect PL type
-                    is_transformation = 'Destination SKU' in df.columns
-                    output, filename = build_pl_base(df, transformation=is_transformation)
+        for uploaded_file in uploaded_files:
+            try:
+                if uploaded_file.name.endswith(".csv"):
+                    df = pd.read_csv(uploaded_file)
+                else:
+                    df = pd.read_excel(
+                        uploaded_file,
+                        engine='openpyxl' if uploaded_file.name.endswith('xlsx') else 'xlrd'
+                    )
 
-                    if output:
-                        zip_archive.writestr(filename, output.getvalue())
+                is_transformation = 'Destination SKU' in df.columns
+                output, filename = build_pl_base(df, transformation=is_transformation)
 
-                except Exception as e:
-                    st.error(f"Error processing file '{uploaded_file.name}': {e}")
-
-        zip_buffer.seek(0)
-        if zip_buffer.getbuffer().nbytes > 0:
-            st.success("All PL files processed successfully!")
-            st.download_button(
-                label="📥 Download All PLs as ZIP",
-                data=zip_buffer,
-                file_name="packing_lists.zip",
-                mime="application/zip"
-            )
+                if output:
+                    st.markdown(f"**✅ {uploaded_file.name} → {filename}**")
+                    st.download_button(
+                        label="⬇️ Download PL Excel",
+                        data=output,
+                        file_name=filename,
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key=filename  # Ensures each button is unique
+                    )
+                    st.divider()
+            except Exception as e:
+                st.error(f"❌ Error processing file '{uploaded_file.name}': {e}")
+                
     st.markdown(
         """
-        <a href="https://docs.google.com/forms/d/e/1FAIpQLSfllE2UA33kBQpr5-Nq2tmDwhnYn9DStNyHRcKdONvpw0qTaQ/viewform" target="_blank">
+        <a href="https://docs.google.com/forms/d/e/1FAIpQLSelQ08zk5O1py2t5czsuW4jnpVYO22LAtMskBxlbk__WuRgmA/viewform" target="_blank">
             <button style='padding: 0.5em 1em; font-size: 16px;'>📧 Fill TO Template | Send Email</button>
         </a>
         """,
