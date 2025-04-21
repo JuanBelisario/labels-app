@@ -212,6 +212,11 @@ def generate_fnsku_labels_from_excel(df):
 
 def build_pl_base(df, transformation=False):
     df = df.copy()
+
+        # 🧹 Skip summary rows like 'Total'
+    df = df[df['TO'].notna()]
+    df = df[~df['TO'].astype(str).str.lower().str.strip().eq("total")]
+    
     required_cols = [
         'TO', 'FOP SO #', 'From Loc', 'To Loc',
         'SKU External ID', 'Required Qty', 'Shipping Method'
