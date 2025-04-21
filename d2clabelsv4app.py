@@ -213,10 +213,6 @@ def generate_fnsku_labels_from_excel(df):
 def build_pl_base(df, transformation=False):
     df = df.copy()
 
-    # 🧹 Remove summary/total rows that mess with the qty sum
-    df = df[df['TO'].notna()]
-    df = df[~df['TO'].astype(str).str.lower().str.strip().eq("total")]
-
     required_cols = [
         'TO', 'FOP SO #', 'From Loc', 'To Loc',
         'SKU External ID', 'Required Qty', 'Shipping Method'
@@ -229,20 +225,36 @@ def build_pl_base(df, transformation=False):
         st.error(f"Missing required columns: {', '.join(missing)}")
         return None, None
 
-    # ✅ Compute total only from valid rows
+    # === FILE NAMING LOGIC ===
     to = df['TO'].iloc[0]
     so = df['FOP SO #'].iloc[0]
     from_loc = df['From Loc'].iloc[0]
     to_loc = df['To Loc'].iloc[0]
-    total_qty = int(pd.to_numeric(df['Required Qty'], errors='coerce').sum())
+
+    total_qty = None
+
+    # Try to extract from 'Total QTY' if there's a 'Total' row
+    if 'Total QTY' in df.columns:
+        total_row = df[df['TO'].astype(str).str.lower().str.strip() == 'total']
+        if total_row.empty and 'Trafilea SKU' in df.columns:
+            total_row = df[df['Trafilea SKU'].astype(str).str.lower().str.strip() == 'total']
+
+        if not total_row.empty:
+            qty_val = total_row.iloc[0].get('Total QTY')
+            if pd.notna(qty_val) and float(qty_val) > 0:
+                total_qty = int(float(qty_val))
+
+    # Fallback if Total QTY is missing or invalid
+    if total_qty is None:
+        filtered_df = df[~df['TO'].astype(str).str.lower().str.strip().eq('total')]
+        total_qty = int(pd.to_numeric(filtered_df['Required Qty'], errors='coerce').sum())
 
     filename = f"{to} + {so} + {from_loc} + {to_loc} + {total_qty} Units.xlsx"
 
-
-    # Base headers
+    # === OUTPUT COLUMNS ===
     headers = [
-        "TO", "SO #", "From Loc", "To Loc", "Trafilea SKU", "Required Qty", "Shipping Method",
-        "FG", "LOT", "Expiration Date", "CARTONS",
+        "TO", "SO #", "From Loc", "To Loc", "Trafilea SKU", "Required Qty",
+        "Shipping Method", "FG", "LOT", "Expiration Date", "CARTONS",
         "UNITS/Ctn", "Total QTY", "Carton Dimensions(inch) ", "Carton WEIGHT-LB",
         "Pallet Dimensions", "Pallet WEIGHT-LB.", "Pallet #"
     ]
@@ -261,7 +273,10 @@ def build_pl_base(df, transformation=False):
 
     if transformation and 'Destination SKU' in df.columns:
         output_df['Destination SKU'] = df['Destination SKU']
+    if 'Total QTY' in df.columns:
+        output_df['Total QTY'] = df['Total QTY']
 
+    # === EXCEL EXPORT ===
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         output_df.to_excel(writer, index=False, sheet_name='PL')
