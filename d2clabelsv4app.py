@@ -367,12 +367,38 @@ elif module == "PL Builder":
                         engine='openpyxl' if uploaded_file.name.endswith('xlsx') else 'xlrd'
                     )
 
-                df = normalize_column_names(df)  # ⬅️ Normalize fuzzy column names first
+                df = normalize_column_names(df)  # just in case user wrote "destination sku" weird
                 is_transformation = 'Destination SKU' in df.columns
                 output, filename = build_pl_base(df, transformation=is_transformation)
 
-
                 if output:
+                    # ---- Extract fields for the form link ----
+                    to = df['TO'].iloc[0]
+                    so = df['FOP SO #'].iloc[0]
+                    from_loc = df['From Loc'].iloc[0]
+                    to_loc = df['To Loc'].iloc[0]
+                    shipping_method = df['Shipping Method'].iloc[0]
+
+                    # Calculate Qty
+                    filtered_df = df[~df['TO'].astype(str).str.lower().str.strip().eq('total')]
+                    qty = int(pd.to_numeric(filtered_df['Required Qty'], errors='coerce').sum())
+
+                    # Calculate SKU count (count of unique SKUs)
+                    sku_count = filtered_df['SKU External ID'].nunique()
+
+                    # Generate prefilled form link
+                    form_link = (
+                        "https://docs.google.com/forms/d/e/1FAIpQLSelQ08zk5O1py2t5czsuW4jnpVYO22LAtMskBxlbk__WuRgmA/viewform"
+                        f"?entry.811040286={to}"
+                        f"&entry.771037158={so}"
+                        f"&entry.75050938={qty}"
+                        f"&entry.2087058692={sku_count}"
+                        f"&entry.227202689={from_loc}"
+                        f"&entry.855389021={to_loc}"
+                        f"&entry.105986750={shipping_method}"
+                    )
+
+                    # ---- Display UI ----
                     with st.container():
                         st.markdown(f"<p style='margin-bottom: 0;'><strong>📄 {filename}</strong></p>", unsafe_allow_html=True)
                         st.download_button(
@@ -383,14 +409,30 @@ elif module == "PL Builder":
                             key=filename,
                             use_container_width=True
                         )
+                        # Button to prefill and open form
+                        st.markdown(
+                            f"""
+                            <div style="margin-top: 0.5em;">
+                                <a href="{form_link}" target="_blank">
+                                    <button style='padding: 0.25em 1em; font-size: 14px; border-radius: 4px; border: 1px solid #ccc; background-color: #f5f5f5; cursor: pointer;'>
+                                        📝 Fill & Send TO to Google Form
+                                    </button>
+                                </a>
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
+
             except Exception as e:
                 st.error(f"❌ Error processing file '{uploaded_file.name}': {e}")
-                
+
     st.markdown(
         """
+        <br>
         <a href="https://docs.google.com/forms/d/e/1FAIpQLSelQ08zk5O1py2t5czsuW4jnpVYO22LAtMskBxlbk__WuRgmA/viewform" target="_blank">
-            <button style='padding: 0.5em 1em; font-size: 16px;'>📧 Fill TO Template | Send Email</button>
+            <button style='padding: 0.5em 1em; font-size: 14px;'>📧 Fill TO Template | Send Email</button>
         </a>
         """,
         unsafe_allow_html=True
     )
+
