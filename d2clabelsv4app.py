@@ -16,6 +16,7 @@ from PyPDF2 import PdfReader, PdfWriter
 import pdfplumber
 import textwrap
 import difflib  # 🔁 ADD THIS NEW IMPORT
+import urllib.parse
 
 def normalize_column_names(df):
     """
@@ -367,12 +368,51 @@ elif module == "PL Builder":
                         engine='openpyxl' if uploaded_file.name.endswith('xlsx') else 'xlrd'
                     )
 
-                df = normalize_column_names(df)  # ⬅️ Normalize fuzzy column names first
+                df = normalize_column_names(df)  # Optional helper if you have column typos
                 is_transformation = 'Destination SKU' in df.columns
                 output, filename = build_pl_base(df, transformation=is_transformation)
 
-
                 if output:
+                    # ---- Extract fields for the form link ----
+                    raw_to = df['TO'].iloc[0]
+                    raw_so = df['FOP SO #'].iloc[0]
+                    raw_from_loc = df['From Loc'].iloc[0]
+                    raw_to_loc = df['To Loc'].iloc[0]
+                    raw_shipping_method = df['Shipping Method'].iloc[0]
+
+                    # Apply any location standardization if you have LOCATION_MAP
+                    from_loc = LOCATION_MAP.get(str(raw_from_loc).strip(), str(raw_from_loc).strip())
+                    to_loc = LOCATION_MAP.get(str(raw_to_loc).strip(), str(raw_to_loc).strip())
+
+                    # Calculate Qty (excluding Total rows)
+                    filtered_df = df[~df['TO'].astype(str).str.lower().str.strip().eq('total')]
+                    qty = int(pd.to_numeric(filtered_df['Required Qty'], errors='coerce').sum())
+
+                    # SKU count
+                    sku_count = filtered_df['SKU External ID'].nunique()
+
+                    # Encode fields properly for URL
+                    prefilled_to = urllib.parse.quote_plus(str(raw_to))
+                    prefilled_so = urllib.parse.quote_plus(str(raw_so))
+                    prefilled_qty = str(qty)
+                    prefilled_skus = str(sku_count)
+                    prefilled_from_loc = urllib.parse.quote_plus(str(from_loc))
+                    prefilled_to_loc = urllib.parse.quote_plus(str(to_loc))
+                    prefilled_shipping = urllib.parse.quote_plus(str(raw_shipping_method))
+
+                    # Build prefill link
+                    form_link = (
+                        "https://docs.google.com/forms/d/e/1FAIpQLSelQ08zk5O1py2t5czsuW4jnpVYO22LAtMskBxlbk__WuRgmA/viewform"
+                        f"?entry.811040286={prefilled_to}"
+                        f"&entry.771037158={prefilled_so}"
+                        f"&entry.75050938={prefilled_qty}"
+                        f"&entry.2087058692={prefilled_skus}"
+                        f"&entry.227202689={prefilled_from_loc}"
+                        f"&entry.855389021={prefilled_to_loc}"
+                        f"&entry.105986750={prefilled_shipping}"
+                    )
+
+                    # ---- Display Download + Prefill UI ----
                     with st.container():
                         st.markdown(f"<p style='margin-bottom: 0;'><strong>📄 {filename}</strong></p>", unsafe_allow_html=True)
                         st.download_button(
@@ -383,13 +423,27 @@ elif module == "PL Builder":
                             key=filename,
                             use_container_width=True
                         )
+                        st.markdown(
+                            f"""
+                            <div style="margin-top: 0.5em; margin-bottom: 1em; text-align: left;">
+                                <a href="{form_link}" target="_blank">
+                                    <button style='padding: 0.25em 1em; font-size: 14px; border-radius: 4px; border: 1px solid #ccc; background-color: #f5f5f5; cursor: pointer;'>
+                                        📝 Fill & Send TO to Google Form
+                                    </button>
+                                </a>
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
+
             except Exception as e:
                 st.error(f"❌ Error processing file '{uploaded_file.name}': {e}")
-                
+
     st.markdown(
         """
+        <br>
         <a href="https://docs.google.com/forms/d/e/1FAIpQLSelQ08zk5O1py2t5czsuW4jnpVYO22LAtMskBxlbk__WuRgmA/viewform" target="_blank">
-            <button style='padding: 0.5em 1em; font-size: 16px;'>📧 Fill TO Template | Send Email</button>
+            <button style='padding: 0.5em 1em; font-size: 14px;'>📧 Fill TO Template | Send Email</button>
         </a>
         """,
         unsafe_allow_html=True
