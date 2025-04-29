@@ -437,7 +437,7 @@ elif module == "PL Builder":
                                         <button style='
                                             padding: 0.4em 1.2em;
                                             font-size: 14px;
-                                            background-color: #eeeeee;
+                                            background-color: #f0f0f0;
                                             border: 1px solid #ccc;
                                             border-radius: 4px;
                                             cursor: pointer;
@@ -456,7 +456,7 @@ elif module == "PL Builder":
                                         <button style='
                                             padding: 0.4em 1.2em;
                                             font-size: 14px;
-                                            background-color: #eeeeee;
+                                            background-color: #f0f0f0;
                                             border: 1px solid #ccc;
                                             border-radius: 4px;
                                             cursor: pointer;
