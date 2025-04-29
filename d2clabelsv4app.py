@@ -15,6 +15,35 @@ from zipfile import ZipFile
 from PyPDF2 import PdfReader, PdfWriter
 import pdfplumber
 import textwrap
+import difflib  # 🔁 ADD THIS NEW IMPORT
+
+def normalize_column_names(df):
+    """
+    Identifies and renames variations of 'Destination SKU' to a standard column name.
+    Accepts: 'destination sku', 'DestinationSKU', 'dest_sku', 'destinationsku', etc.
+    """
+    target_normalized = "destinationsku"
+
+    for col in df.columns:
+        col_normalized = col.strip().lower().replace(" ", "").replace("_", "")
+        if target_normalized in col_normalized:
+            df.rename(columns={col: "Destination SKU"}, inplace=True)
+            return df
+
+    # Fallback: fuzzy match if substring wasn't enough
+    import difflib
+    normalized_map = {col: col.strip().lower().replace(" ", "").replace("_", "") for col in df.columns}
+    match = difflib.get_close_matches(target_normalized, normalized_map.values(), n=1, cutoff=0.75)
+
+    if match:
+        for original_col, normalized in normalized_map.items():
+            if normalized == match[0]:
+                df.rename(columns={original_col: "Destination SKU"}, inplace=True)
+                break
+
+    return df
+
+
 
 # --- ORIGINAL LABEL LOGIC STARTS HERE (UNCHANGED) ---
 
@@ -69,24 +98,7 @@ def generate_fnsku_barcode(fnsku):
     return f"{barcode_filename}.png"
 
 def generate_d2c_barcode(upc_code, sku):
-    # Clean and pad the UPC code to exactly 12 digits
-    upc_str = str(upc_code).strip()
-    if len(upc_str) < 12:
-        # If less than 12 digits, pad with zeros on the left
-        upc_str = upc_str.zfill(12)
-    elif len(upc_str) > 12:
-        # If more than 12 digits, take the rightmost 12 digits
-        upc_str = upc_str[-12:]
-    
-    barcode_ean = EAN13('0' + upc_str, writer=ImageWriter())  # Add leading 0 for EAN13
-    barcode_ean.writer.set_options({
-        'module_width': 0.35,
-        'module_height': 16,
-        'font_size': 7.75,
-        'text_distance': 4.5,
-        'quiet_zone': 1.25,
-        'dpi': 600
-    })
+    barcode_ean = EAN13(upc_code, writer=ImageWriter())
     clean_sku = clean_filename(sku)
     barcode_filename = f"{clean_sku}_barcode"
     barcode_ean.save(barcode_filename)
@@ -127,31 +139,22 @@ def generate_label_pdf(sku, upc_code, lot_num, output_path):
     y_barcode = height / 2 - 8 * mm
     y_lot = 4.75 * mm
     barcode_width = 51.5 * mm
-    
-    # Draw SKU at top
     c.setFont("Helvetica", 9.5)
     c.drawCentredString(width / 2, y_sku, sku)
-    
-    # Draw original UPC code above barcode
-    c.setFont("Helvetica", 9)
-    c.drawCentredString(width / 2, y_barcode + 18 * mm, str(upc_code).strip())
-    
-    # Generate and draw barcode
+    if len(upc_code) == 12:
+        upc_code = '0' + upc_code
     barcode_path = generate_d2c_barcode(upc_code, sku)
     c.drawImage(barcode_path, (width - barcode_width) / 2, y_barcode, width=barcode_width, height=16 * mm)
     os.remove(barcode_path)
-    
-    # Draw LOT box and number
     c.setFont("Helvetica", 9)
-    if pd.notna(lot_num) and str(lot_num).strip():
+    if lot_num:
         lot_box_width = 40 * mm
         lot_box_height = 4 * mm
         x_lot_box = (width - lot_box_width) / 2
         y_lot_box = y_lot - 1.125 * mm
         c.setStrokeColorRGB(0, 0, 0)
         c.rect(x_lot_box, y_lot_box, lot_box_width, lot_box_height, stroke=1, fill=0)
-        c.drawCentredString(width / 2, y_lot, str(lot_num).strip())
-    
+        c.drawCentredString(width / 2, y_lot, lot_num)
     c.save()
 
 def generate_pdfs_from_excel(df):
@@ -168,8 +171,8 @@ def generate_pdfs_from_excel(df):
     progress_bar = st.progress(0)
     for index, row in df.iterrows():
         sku = row['SKU']
-        upc_code = str(row['UPC Code']).strip()
-        lot_num = str(row['LOT#']).strip() if pd.notna(row['LOT#']) else ""
+        upc_code = str(row['UPC Code']).zfill(12)
+        lot_num = row['LOT#'] if pd.notnull(row['LOT#']) else ""
         pdf_filename = clean_filename(f"{sku}.pdf")
         pdf_path = os.path.join(output_folder, pdf_filename)
         generate_label_pdf(sku, upc_code, lot_num, pdf_path)
@@ -209,6 +212,7 @@ def generate_fnsku_labels_from_excel(df):
 
 def build_pl_base(df, transformation=False):
     df = df.copy()
+
     required_cols = [
         'TO', 'FOP SO #', 'From Loc', 'To Loc',
         'SKU External ID', 'Required Qty', 'Shipping Method'
@@ -221,17 +225,36 @@ def build_pl_base(df, transformation=False):
         st.error(f"Missing required columns: {', '.join(missing)}")
         return None, None
 
+    # === FILE NAMING LOGIC ===
     to = df['TO'].iloc[0]
     so = df['FOP SO #'].iloc[0]
     from_loc = df['From Loc'].iloc[0]
     to_loc = df['To Loc'].iloc[0]
-    total_qty = int(pd.to_numeric(df['Required Qty'], errors='coerce').sum())
+
+    total_qty = None
+
+    # Try to extract from 'Total QTY' if there's a 'Total' row
+    if 'Total QTY' in df.columns:
+        total_row = df[df['TO'].astype(str).str.lower().str.strip() == 'total']
+        if total_row.empty and 'Trafilea SKU' in df.columns:
+            total_row = df[df['Trafilea SKU'].astype(str).str.lower().str.strip() == 'total']
+
+        if not total_row.empty:
+            qty_val = total_row.iloc[0].get('Total QTY')
+            if pd.notna(qty_val) and float(qty_val) > 0:
+                total_qty = int(float(qty_val))
+
+    # Fallback if Total QTY is missing or invalid
+    if total_qty is None:
+        filtered_df = df[~df['TO'].astype(str).str.lower().str.strip().eq('total')]
+        total_qty = int(pd.to_numeric(filtered_df['Required Qty'], errors='coerce').sum())
+
     filename = f"{to} + {so} + {from_loc} + {to_loc} + {total_qty} Units.xlsx"
 
-    # Base headers
+    # === OUTPUT COLUMNS ===
     headers = [
-        "TO", "SO #", "From Loc", "To Loc", "Trafilea SKU", "Required Qty", "Shipping Method",
-        "FG", "LOT", "Expiration Date", "CARTONS",
+        "TO", "SO #", "From Loc", "To Loc", "Trafilea SKU", "Required Qty",
+        "Shipping Method", "FG", "LOT", "Expiration Date", "CARTONS",
         "UNITS/Ctn", "Total QTY", "Carton Dimensions(inch) ", "Carton WEIGHT-LB",
         "Pallet Dimensions", "Pallet WEIGHT-LB.", "Pallet #"
     ]
@@ -250,7 +273,10 @@ def build_pl_base(df, transformation=False):
 
     if transformation and 'Destination SKU' in df.columns:
         output_df['Destination SKU'] = df['Destination SKU']
+    if 'Total QTY' in df.columns:
+        output_df['Total QTY'] = df['Total QTY']
 
+    # === EXCEL EXPORT ===
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         output_df.to_excel(writer, index=False, sheet_name='PL')
@@ -275,20 +301,6 @@ def build_pl_base(df, transformation=False):
 
     output.seek(0)
     return output, filename
-
-def generate_prefilled_form_link(form_data):
-    base_url = "https://docs.google.com/forms/d/e/1FAIpQLSfllE2UA33kBQpr5-Nq2tmDwhnYn9DStNyHRcKdONvpw0qTaQ/viewform"
-    params = []
-    
-    # Add form data as URL parameters
-    for key, value in form_data.items():
-        if value:  # Only add non-empty values
-            params.append(f"{key}={value}")
-    
-    # Join parameters with & and append to base URL
-    if params:
-        return f"{base_url}?{'&'.join(params)}"
-    return base_url
 
 # --- STREAMLIT APP UI ---
 
@@ -342,90 +354,43 @@ elif module == "PL Builder":
     )
 
     if uploaded_files:
-        zip_buffer = BytesIO()
-        with ZipFile(zip_buffer, 'w') as zip_archive:
-            for uploaded_file in uploaded_files:
-                try:
-                    if uploaded_file.name.endswith(".csv"):
-                        df = pd.read_csv(uploaded_file)
-                    else:
-                        df = pd.read_excel(
-                            uploaded_file,
-                            engine='openpyxl' if uploaded_file.name.endswith('xlsx') else 'xlrd'
-                        )
+        st.success(f"{len(uploaded_files)} file(s) uploaded successfully.")
+        st.markdown("### 📝 Processed Packing Lists")
 
-                    # Auto-detect PL type
-                    is_transformation = 'Destination SKU' in df.columns
-                    output, filename = build_pl_base(df, transformation=is_transformation)
-
-                    if output:
-                        zip_archive.writestr(filename, output.getvalue())
-
-                except Exception as e:
-                    st.error(f"Error processing file '{uploaded_file.name}': {e}")
-
-        zip_buffer.seek(0)
-        if zip_buffer.getbuffer().nbytes > 0:
-            st.success("All PL files processed successfully!")
-            st.download_button(
-                label="📥 Download All PLs as ZIP",
-                data=zip_buffer,
-                file_name="packing_lists.zip",
-                mime="application/zip"
-            )
-            
-            # Generate prefilled form link with PL data
-            if len(uploaded_files) > 0:
-                try:
-                    # Get data from the first file
-                    first_file = uploaded_files[0]
-                    if first_file.name.endswith(".csv"):
-                        df = pd.read_csv(first_file)
-                    else:
-                        df = pd.read_excel(
-                            first_file,
-                            engine='openpyxl' if first_file.name.endswith('xlsx') else 'xlrd'
-                        )
-                    
-                    # Extract relevant data for the form
-                    form_data = {
-                        'entry.811040286': df['TO'].iloc[0] if 'TO' in df.columns else '',
-                        'entry.771037158': df['FOP SO #'].iloc[0] if 'FOP SO #' in df.columns else '',
-                        'entry.75050938': df['Required Qty'].iloc[0] if 'Required Qty' in df.columns else '',
-                        'entry.2087058692': len(df) if 'SKU External ID' in df.columns else '',  # SKU count
-                        'entry.227202689': df['From Loc'].iloc[0] if 'From Loc' in df.columns else '',
-                        'entry.855389021': df['To Loc'].iloc[0] if 'To Loc' in df.columns else '',
-                        'entry.105986750': df['Shipping Method'].iloc[0] if 'Shipping Method' in df.columns else ''
-                    }
-                    
-                    # Generate and display the prefilled form link
-                    prefilled_link = generate_prefilled_form_link(form_data)
-                    st.markdown(
-                        f"""
-                        <a href="{prefilled_link}" target="_blank">
-                            <button style='padding: 0.5em 1em; font-size: 16px;'>📧 Fill TO Template | Send Email</button>
-                        </a>
-                        """,
-                        unsafe_allow_html=True
+        for uploaded_file in uploaded_files:
+            try:
+                if uploaded_file.name.endswith(".csv"):
+                    df = pd.read_csv(uploaded_file)
+                else:
+                    df = pd.read_excel(
+                        uploaded_file,
+                        engine='openpyxl' if uploaded_file.name.endswith('xlsx') else 'xlrd'
                     )
-                except Exception as e:
-                    st.error(f"Error generating prefilled form link: {e}")
-                    # Fallback to regular form link if there's an error
-                    st.markdown(
-                        """
-                        <a href="https://docs.google.com/forms/d/e/1FAIpQLSfllE2UA33kBQpr5-Nq2tmDwhnYn9DStNyHRcKdONvpw0qTaQ/viewform" target="_blank">
-                            <button style='padding: 0.5em 1em; font-size: 16px;'>📧 Fill TO Template | Send Email</button>
-                        </a>
-                        """,
-                        unsafe_allow_html=True
-                    )
-    else:
-        # Show regular form link if no files are uploaded
-        st.markdown(
-            """
-            <a href="https://docs.google.com/forms/d/e/1FAIpQLSfllE2UA33kBQpr5-Nq2tmDwhnYn9DStNyHRcKdONvpw0qTaQ/viewform" target="_blank">
-                <button style='padding: 0.5em 1em; font-size: 16px;'>📧 Fill TO Template | Send Email</button>
-            </a>
-            """,
-            unsafe_allow_html=True
-        )
+
+                df = normalize_column_names(df)  # ⬅️ Normalize fuzzy column names first
+                is_transformation = 'Destination SKU' in df.columns
+                output, filename = build_pl_base(df, transformation=is_transformation)
+
+
+                if output:
+                    with st.container():
+                        st.markdown(f"<p style='margin-bottom: 0;'><strong>📄 {filename}</strong></p>", unsafe_allow_html=True)
+                        st.download_button(
+                            label="⬇️ Download PL Excel",
+                            data=output,
+                            file_name=filename,
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key=filename,
+                            use_container_width=True
+                        )
+            except Exception as e:
+                st.error(f"❌ Error processing file '{uploaded_file.name}': {e}")
+                
+    st.markdown(
+        """
+        <a href="https://docs.google.com/forms/d/e/1FAIpQLSelQ08zk5O1py2t5czsuW4jnpVYO22LAtMskBxlbk__WuRgmA/viewform" target="_blank">
+            <button style='padding: 0.5em 1em; font-size: 16px;'>📧 Fill TO Template | Send Email</button>
+        </a>
+        """,
+        unsafe_allow_html=True
+    )
