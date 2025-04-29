@@ -428,7 +428,7 @@ elif module == "PL Builder":
                     with st.container():
                         st.markdown(f"<p style='margin-bottom: 0;'><strong>📄 {filename}</strong></p>", unsafe_allow_html=True)
 
-                        col1, col2 = st.columns([1.2, 1.2])
+                        col1, col2 = st.columns([1, 1])
                         with col1:
                             st.markdown(
                                 f"""
