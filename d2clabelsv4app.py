@@ -428,12 +428,12 @@ elif module == "PL Builder":
                     with st.container():
                         st.markdown(f"<p style='margin-bottom: 0;'><strong>📄 {filename}</strong></p>", unsafe_allow_html=True)
 
-                        col1, col2 = st.columns([1, 1])
+                        col1, col2 = st.columns([1.5, 1.5])
                         with col1:
                             st.markdown(
                                 f"""
                                 <a href="{form_link}" target="_blank">
-                                    <button style='padding: 0.3em 1em; font-size: 14px; margin-top: 6px;'>
+                                    <button style='padding: 0.5em 1em; font-size: 14px; margin-top: 6px;'>
                                         📝 Fill TO Template | Send Email
                                     </button>
                                 </a>
