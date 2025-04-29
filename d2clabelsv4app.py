@@ -428,27 +428,48 @@ elif module == "PL Builder":
                     with st.container():
                         st.markdown(f"<p style='margin-bottom: 0;'><strong>📄 {filename}</strong></p>", unsafe_allow_html=True)
 
-                        col1, col2 = st.columns([1.5, 1.5])
+                        col1, col2 = st.columns(2)
                         with col1:
                             st.markdown(
                                 f"""
-                                <a href="{form_link}" target="_blank">
-                                    <button style='padding: 0.5em 1em; font-size: 14px; margin-top: 6px;'>
-                                        📝 Fill TO Template | Send Email
-                                    </button>
-                                </a>
+                                <div style='display: flex; justify-content: flex-start;'>
+                                    <a href="{form_link}" target="_blank" style="text-decoration: none;">
+                                        <button style='
+                                            padding: 0.4em 1.2em;
+                                            font-size: 14px;
+                                            background-color: #eeeeee;
+                                            border: 1px solid #ccc;
+                                            border-radius: 4px;
+                                            cursor: pointer;
+                                            width: 180px;
+                                        '>📝 Fill TO Template</button>
+                                    </a>
+                                </div>
                                 """,
                                 unsafe_allow_html=True
                             )
                         with col2:
-                            st.download_button(
-                                label="⬇️ Download PL Excel",
-                                data=output,
-                                file_name=filename,
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                key=filename,
-                                use_container_width=True
+                            st.markdown(
+                                f"""
+                                <div style='display: flex; justify-content: flex-start;'>
+                                    <form method="post">
+                                        <button style='
+                                            padding: 0.4em 1.2em;
+                                            font-size: 14px;
+                                            background-color: #eeeeee;
+                                            border: 1px solid #ccc;
+                                            border-radius: 4px;
+                                            cursor: pointer;
+                                            width: 180px;
+                                        '>
+                                            ⬇️ Download PL Excel
+                                        </button>
+                                    </form>
+                                </div>
+                                """,
+                                unsafe_allow_html=True
                             )
+
 
             except Exception as e:
                 st.error(f"❌ Error processing file '{uploaded_file.name}': {e}")
