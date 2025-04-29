@@ -368,73 +368,65 @@ elif module == "PL Builder":
                         engine='openpyxl' if uploaded_file.name.endswith('xlsx') else 'xlrd'
                     )
 
-                df = normalize_column_names(df)  # Optional helper if you have column typos
-                is_transformation = 'Destination SKU' in df.columns
+                # Normalize column names (optional helper)
+                df.columns = [col.strip() for col in df.columns]
+                is_transformation = any("destination sku" in col.lower() for col in df.columns)
                 output, filename = build_pl_base(df, transformation=is_transformation)
 
                 if output:
-                    # ---- Extract fields for the form link ----
+                    # --- Extract values for prefill ---
                     raw_to = df['TO'].iloc[0]
                     raw_so = df['FOP SO #'].iloc[0]
                     raw_from_loc = df['From Loc'].iloc[0]
                     raw_to_loc = df['To Loc'].iloc[0]
-                    raw_shipping_method = df['Shipping Method'].iloc[0]
+                    raw_shipping = df['Shipping Method'].iloc[0]
 
-                    # Apply any location standardization if you have LOCATION_MAP
+                    # Clean locs (use LOCATION_MAP if defined)
                     from_loc = LOCATION_MAP.get(str(raw_from_loc).strip(), str(raw_from_loc).strip())
                     to_loc = LOCATION_MAP.get(str(raw_to_loc).strip(), str(raw_to_loc).strip())
 
-                    # Calculate Qty (excluding Total rows)
                     filtered_df = df[~df['TO'].astype(str).str.lower().str.strip().eq('total')]
                     qty = int(pd.to_numeric(filtered_df['Required Qty'], errors='coerce').sum())
-
-                    # SKU count
                     sku_count = filtered_df['SKU External ID'].nunique()
 
-                    # Encode fields properly for URL
-                    prefilled_to = urllib.parse.quote_plus(str(raw_to))
-                    prefilled_so = urllib.parse.quote_plus(str(raw_so))
-                    prefilled_qty = str(qty)
-                    prefilled_skus = str(sku_count)
-                    prefilled_from_loc = urllib.parse.quote_plus(str(from_loc))
-                    prefilled_to_loc = urllib.parse.quote_plus(str(to_loc))
-                    prefilled_shipping = urllib.parse.quote_plus(str(raw_shipping_method))
-
-                    # Build prefill link
+                    # --- Encode values for Google Forms ---
+                    def enc(val): return urllib.parse.quote_plus(str(val))
                     form_link = (
                         "https://docs.google.com/forms/d/e/1FAIpQLSelQ08zk5O1py2t5czsuW4jnpVYO22LAtMskBxlbk__WuRgmA/viewform"
-                        f"?entry.811040286={prefilled_to}"
-                        f"&entry.771037158={prefilled_so}"
-                        f"&entry.75050938={prefilled_qty}"
-                        f"&entry.2087058692={prefilled_skus}"
-                        f"&entry.227202689={prefilled_from_loc}"
-                        f"&entry.855389021={prefilled_to_loc}"
-                        f"&entry.105986750={prefilled_shipping}"
+                        f"?entry.811040286={enc(raw_to)}"
+                        f"&entry.771037158={enc(raw_so)}"
+                        f"&entry.75050938={qty}"
+                        f"&entry.2087058692={sku_count}"
+                        f"&entry.227202689={enc(from_loc)}"
+                        f"&entry.855389021={enc(to_loc)}"
+                        f"&entry.105986750={enc(raw_shipping)}"
                     )
 
-                    # ---- Display Download + Prefill UI ----
+                    # --- Display download + prefill buttons ---
                     with st.container():
                         st.markdown(f"<p style='margin-bottom: 0;'><strong>📄 {filename}</strong></p>", unsafe_allow_html=True)
-                        st.download_button(
-                            label="⬇️ Download PL Excel",
-                            data=output,
-                            file_name=filename,
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            key=filename,
-                            use_container_width=True
-                        )
-                        st.markdown(
-                            f"""
-                            <div style="margin-top: 0.5em; margin-bottom: 1em; text-align: left;">
+
+                        col1, col2 = st.columns([3, 1])
+                        with col1:
+                            st.markdown(
+                                f"""
                                 <a href="{form_link}" target="_blank">
-                                    <button style='padding: 0.25em 1em; font-size: 14px; border-radius: 4px; border: 1px solid #ccc; background-color: #f5f5f5; cursor: pointer;'>
-                                        📝 Fill & Send TO to Google Form
+                                    <button style='padding: 0.3em 1em; font-size: 14px; margin-top: 6px;'>
+                                        📝 Fill TO Template | Send Email
                                     </button>
                                 </a>
-                            </div>
-                            """,
-                            unsafe_allow_html=True
-                        )
+                                """,
+                                unsafe_allow_html=True
+                            )
+                        with col2:
+                            st.download_button(
+                                label="⬇️ Download PL Excel",
+                                data=output,
+                                file_name=filename,
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                key=filename,
+                                use_container_width=True
+                            )
 
             except Exception as e:
                 st.error(f"❌ Error processing file '{uploaded_file.name}': {e}")
