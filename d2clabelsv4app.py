@@ -210,6 +210,28 @@ def generate_fnsku_labels_from_excel(df):
     return zip_filename
 
 # --- PL BUILDER STARTS HERE ---
+# Optional: clean up inconsistent location names for standardization
+LOCATION_MAP = {
+    "JD NJ : JD NJ - AMAZON FBA": "JD NJ - AMZ FBA",
+    "JD Canada : JD Canada - AMZ FBA": "JD CANADA - AMZ FBA",
+    "JD UK : JD UK - AMAZON FBA": "JD UK - AMZ FBA",
+    "JD AU : JD AU - AMAZON FBA": "JD AU - AMZ FBA",
+    "JD - Belk": "JD CA - BELK",
+    "JD - Showcase": "JD CANADA - SHOWCASE",
+    "JD Canada": "JD CANADA",
+    "JD CA - Walmart": "JD CA - WALMART",
+    "JD - Nordstrom.com": "JD CA - NORDSTROM.COM",
+    "JD - Nordstrom.com": "JD CA - NORDSTROM STORES",
+    "JD CA - Macy's": "JD CA - MACY'S",
+    "JD NJ - Macy's": "JD CA - MACY'S",
+    "JD ATL - Macy's": "JD CA - MACY'S",
+    "Kenz - SALASA": "SALAZA SA",
+    
+
+
+    
+    # You can keep expanding this list as needed
+}
 
 def build_pl_base(df, transformation=False):
     df = df.copy()
