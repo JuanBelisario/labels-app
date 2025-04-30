@@ -212,7 +212,7 @@ def generate_fnsku_labels_from_excel(df):
 # --- PL BUILDER STARTS HERE ---
 # Optional: clean up inconsistent location names for standardization
 LOCATION_MAP = {
-    "JD NJ : JD NJ - AMAZON FBA": "JD NJ - AMZ FBA",
+    "JD NJ : JD NJ - AMZ FBA": "JD NJ - AMZ FBA",
     "JD Canada : JD Canada - AMZ FBA": "JD CANADA - AMZ FBA",
     "JD UK : JD UK - AMAZON FBA": "JD UK - AMZ FBA",
     "JD AU : JD AU - AMAZON FBA": "JD AU - AMZ FBA",
