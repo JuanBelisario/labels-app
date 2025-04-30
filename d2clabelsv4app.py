@@ -226,6 +226,7 @@ LOCATION_MAP = {
     "JD NJ - Macy's": "JD CA - MACY'S",
     "JD ATL - Macy's": "JD CA - MACY'S",
     "Kenz - SALASA": "SALAZA SA",
+    "JD Canada - Walmart": "JD CANADA - WALMART"
     
 
 
