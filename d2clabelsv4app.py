@@ -390,29 +390,24 @@ elif module == "PL Builder":
                         engine='openpyxl' if uploaded_file.name.endswith('xlsx') else 'xlrd'
                     )
 
-                # Normalize column names
                 df.columns = [col.strip() for col in df.columns]
                 is_transformation = any("destination sku" in col.lower() for col in df.columns)
                 output, filename = build_pl_base(df, transformation=is_transformation)
 
                 if output:
-                    # Extract values for prefill
                     raw_to = df['TO'].iloc[0]
                     raw_so = df['FOP SO #'].iloc[0]
                     raw_from_loc = df['From Loc'].iloc[0]
                     raw_to_loc = df['To Loc'].iloc[0]
                     raw_shipping = df['Shipping Method'].iloc[0]
 
-                    # Normalize locations
                     from_loc = LOCATION_MAP.get(str(raw_from_loc).strip(), str(raw_from_loc).strip())
                     to_loc = LOCATION_MAP.get(str(raw_to_loc).strip(), str(raw_to_loc).strip())
 
-                    # Filter out totals row
                     filtered_df = df[~df['TO'].astype(str).str.lower().str.strip().eq('total')]
                     qty = int(pd.to_numeric(filtered_df['Required Qty'], errors='coerce').sum())
                     sku_count = filtered_df['SKU External ID'].nunique()
 
-                    # Build prefill link
                     def enc(val): return urllib.parse.quote_plus(str(val))
                     form_link = (
                         "https://docs.google.com/forms/d/e/1FAIpQLSelQ08zk5O1py2t5czsuW4jnpVYO22LAtMskBxlbk__WuRgmA/viewform"
@@ -425,42 +420,42 @@ elif module == "PL Builder":
                         f"&entry.105986750={enc(raw_shipping)}"
                     )
 
-                    # UI Output
                     with st.container():
-                        st.markdown(f"<p style='margin-bottom: 0;'><strong>📄 {filename}</strong></p>", unsafe_allow_html=True)
+                        st.markdown(f"<p style='margin-bottom: 0.25em;'><strong>📄 {filename}</strong></p>", unsafe_allow_html=True)
 
-                        col1, col2 = st.columns([1, 1])
-                        with col1:
-                            st.markdown(
-                                f"""
+                        st.markdown(
+                            f"""
+                            <div style="display: flex; justify-content: center; gap: 1em; margin-bottom: 1.2em;">
                                 <a href="{form_link}" target="_blank" style="text-decoration: none;">
                                     <button style='
-                                        padding: 0.4em 0.8em;
+                                        padding: 0.4em 1em;
                                         font-size: 14px;
-                                        border: 1px solid #444;
-                                        border-radius: 4px;
-                                        background-color: #222;
-                                        color: #f1f1f1;
-                                        width: 100%;
+                                        border: 1px solid #555;
+                                        border-radius: 6px;
+                                        background-color: #1e1e1e;
+                                        color: white;
+                                        cursor: pointer;
                                     '>📝 Fill TO Template</button>
                                 </a>
-                                """,
-                                unsafe_allow_html=True
-                            )
-                        with col2:
-                            st.download_button(
-                                label="⬇️ Download PL Excel",
-                                data=output,
-                                file_name=filename,
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                key=filename,
-                                use_container_width=True
-                            )
+                                <a download="{filename}">
+                                    <button onclick="window.location.href='{filename}'" style='
+                                        padding: 0.4em 1em;
+                                        font-size: 14px;
+                                        border: 1px solid #555;
+                                        border-radius: 6px;
+                                        background-color: #1e1e1e;
+                                        color: white;
+                                        cursor: pointer;
+                                    '>⬇️ Download PL Excel</button>
+                                </a>
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
 
             except Exception as e:
                 st.error(f"❌ Error processing file '{uploaded_file.name}': {e}")
 
-    # Fallback manual form link
     st.markdown(
         """
         <br>
@@ -470,4 +465,3 @@ elif module == "PL Builder":
         """,
         unsafe_allow_html=True
     )
-
