@@ -425,27 +425,25 @@ elif module == "PL Builder":
 
                         st.markdown(
                             f"""
-                            <div style="display: flex; justify-content: center; gap: 1em; margin-bottom: 1.2em;">
+                            <div style="display: flex; justify-content: flex-start; gap: 1em; margin-bottom: 1.2em;">
                                 <a href="{form_link}" target="_blank" style="text-decoration: none;">
                                     <button style='
                                         padding: 0.4em 1em;
                                         font-size: 14px;
-                                        border: 1px solid #555;
+                                        border: 1px solid #999;
                                         border-radius: 6px;
-                                        background-color: #1e1e1e;
-                                        color: white;
-                                        cursor: pointer;
+                                        background-color: #f4f4f4;
+                                        color: #000;
                                     '>📝 Fill TO Template</button>
                                 </a>
                                 <a download="{filename}">
                                     <button onclick="window.location.href='{filename}'" style='
                                         padding: 0.4em 1em;
                                         font-size: 14px;
-                                        border: 1px solid #555;
+                                        border: 1px solid #999;
                                         border-radius: 6px;
-                                        background-color: #1e1e1e;
-                                        color: white;
-                                        cursor: pointer;
+                                        background-color: #f4f4f4;
+                                        color: #000;
                                     '>⬇️ Download PL Excel</button>
                                 </a>
                             </div>
