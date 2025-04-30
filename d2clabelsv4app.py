@@ -390,11 +390,13 @@ elif module == "PL Builder":
                         engine='openpyxl' if uploaded_file.name.endswith('xlsx') else 'xlrd'
                     )
 
+                # Normalize column names
                 df.columns = [col.strip() for col in df.columns]
                 is_transformation = any("destination sku" in col.lower() for col in df.columns)
                 output, filename = build_pl_base(df, transformation=is_transformation)
 
                 if output:
+                    # --- Extract values for prefill ---
                     raw_to = df['TO'].iloc[0]
                     raw_so = df['FOP SO #'].iloc[0]
                     raw_from_loc = df['From Loc'].iloc[0]
@@ -421,11 +423,15 @@ elif module == "PL Builder":
                     )
 
                     with st.container():
-                        st.markdown(f"<p style='margin-bottom: 0.25em;'><strong>📄 {filename}</strong></p>", unsafe_allow_html=True)
-
                         st.markdown(
-                            f"""
-                            <div style="display: flex; justify-content: flex-start; gap: 1em; margin-bottom: 1.2em;">
+                            f"<p style='margin-bottom: 0.25em;'><strong>📄 {filename}</strong></p>",
+                            unsafe_allow_html=True
+                        )
+
+                        col1, col2 = st.columns([1, 1])
+                        with col1:
+                            st.markdown(
+                                f"""
                                 <a href="{form_link}" target="_blank" style="text-decoration: none;">
                                     <button style='
                                         padding: 0.4em 1em;
@@ -434,22 +440,21 @@ elif module == "PL Builder":
                                         border-radius: 6px;
                                         background-color: #f4f4f4;
                                         color: #000;
+                                        width: 100%;
                                     '>📝 Fill TO Template</button>
                                 </a>
-                                <a download="{filename}">
-                                    <button onclick="window.location.href='{filename}'" style='
-                                        padding: 0.4em 1em;
-                                        font-size: 14px;
-                                        border: 1px solid #999;
-                                        border-radius: 6px;
-                                        background-color: #f4f4f4;
-                                        color: #000;
-                                    '>⬇️ Download PL Excel</button>
-                                </a>
-                            </div>
-                            """,
-                            unsafe_allow_html=True
-                        )
+                                """,
+                                unsafe_allow_html=True
+                            )
+                        with col2:
+                            st.download_button(
+                                label="⬇️ Download PL Excel",
+                                data=output,
+                                file_name=filename,
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                key=filename,
+                                use_container_width=True
+                            )
 
             except Exception as e:
                 st.error(f"❌ Error processing file '{uploaded_file.name}': {e}")
