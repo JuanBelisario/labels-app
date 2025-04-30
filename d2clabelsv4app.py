@@ -390,28 +390,29 @@ elif module == "PL Builder":
                         engine='openpyxl' if uploaded_file.name.endswith('xlsx') else 'xlrd'
                     )
 
-                # Normalize column names (optional helper)
+                # Normalize column names
                 df.columns = [col.strip() for col in df.columns]
                 is_transformation = any("destination sku" in col.lower() for col in df.columns)
                 output, filename = build_pl_base(df, transformation=is_transformation)
 
                 if output:
-                    # --- Extract values for prefill ---
+                    # Extract values for prefill
                     raw_to = df['TO'].iloc[0]
                     raw_so = df['FOP SO #'].iloc[0]
                     raw_from_loc = df['From Loc'].iloc[0]
                     raw_to_loc = df['To Loc'].iloc[0]
                     raw_shipping = df['Shipping Method'].iloc[0]
 
-                    # Clean locs (use LOCATION_MAP if defined)
+                    # Normalize locations
                     from_loc = LOCATION_MAP.get(str(raw_from_loc).strip(), str(raw_from_loc).strip())
                     to_loc = LOCATION_MAP.get(str(raw_to_loc).strip(), str(raw_to_loc).strip())
 
+                    # Filter out totals row
                     filtered_df = df[~df['TO'].astype(str).str.lower().str.strip().eq('total')]
                     qty = int(pd.to_numeric(filtered_df['Required Qty'], errors='coerce').sum())
                     sku_count = filtered_df['SKU External ID'].nunique()
 
-                    # --- Encode values for Google Forms ---
+                    # Build prefill link
                     def enc(val): return urllib.parse.quote_plus(str(val))
                     form_link = (
                         "https://docs.google.com/forms/d/e/1FAIpQLSelQ08zk5O1py2t5czsuW4jnpVYO22LAtMskBxlbk__WuRgmA/viewform"
@@ -424,56 +425,42 @@ elif module == "PL Builder":
                         f"&entry.105986750={enc(raw_shipping)}"
                     )
 
-                    # --- Display download + prefill buttons ---
+                    # UI Output
                     with st.container():
                         st.markdown(f"<p style='margin-bottom: 0;'><strong>📄 {filename}</strong></p>", unsafe_allow_html=True)
 
-                        col1, col2 = st.columns(2)
+                        col1, col2 = st.columns([1, 1])
                         with col1:
                             st.markdown(
                                 f"""
-                                <div style='display: flex; justify-content: flex-start;'>
-                                    <a href="{form_link}" target="_blank" style="text-decoration: none;">
-                                        <button style='
-                                            padding: 0.4em 1.2em;
-                                            font-size: 14px;
-                                            background-color: #f0f0f0;
-                                            border: 1px solid #ccc;
-                                            border-radius: 4px;
-                                            cursor: pointer;
-                                            width: 180px;
-                                        '>📝 Fill TO Template</button>
-                                    </a>
-                                </div>
+                                <a href="{form_link}" target="_blank" style="text-decoration: none;">
+                                    <button style='
+                                        padding: 0.4em 0.8em;
+                                        font-size: 14px;
+                                        border: 1px solid #444;
+                                        border-radius: 4px;
+                                        background-color: #222;
+                                        color: #f1f1f1;
+                                        width: 100%;
+                                    '>📝 Fill TO Template</button>
+                                </a>
                                 """,
                                 unsafe_allow_html=True
                             )
                         with col2:
-                            st.markdown(
-                                f"""
-                                <div style='display: flex; justify-content: flex-start;'>
-                                    <form method="post">
-                                        <button style='
-                                            padding: 0.4em 1.2em;
-                                            font-size: 14px;
-                                            background-color: #f0f0f0;
-                                            border: 1px solid #ccc;
-                                            border-radius: 4px;
-                                            cursor: pointer;
-                                            width: 180px;
-                                        '>
-                                            ⬇️ Download PL Excel
-                                        </button>
-                                    </form>
-                                </div>
-                                """,
-                                unsafe_allow_html=True
+                            st.download_button(
+                                label="⬇️ Download PL Excel",
+                                data=output,
+                                file_name=filename,
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                key=filename,
+                                use_container_width=True
                             )
-
 
             except Exception as e:
                 st.error(f"❌ Error processing file '{uploaded_file.name}': {e}")
 
+    # Fallback manual form link
     st.markdown(
         """
         <br>
@@ -483,3 +470,4 @@ elif module == "PL Builder":
         """,
         unsafe_allow_html=True
     )
+
