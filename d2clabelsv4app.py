@@ -221,12 +221,14 @@ LOCATION_MAP = {
     "JD Canada": "JD CANADA",
     "JD CA - Walmart": "JD CA - WALMART",
     "JD - Nordstrom.com": "JD CA - NORDSTROM.COM",
-    "JD - Nordstrom.com": "JD CA - NORDSTROM STORES",
+    "JD - Nordstrom Stores": "JD CA - NORDSTROM STORES",
     "JD CA - Macy's": "JD CA - MACY'S",
     "JD NJ - Macy's": "JD CA - MACY'S",
     "JD ATL - Macy's": "JD CA - MACY'S",
+    "Kenz - SALASA": "SALAZA SA - KENZ",
     "Kenz - SALASA": "SALAZA SA",
-    "JD Canada - Walmart": "JD CANADA - WALMART"
+    "JD Canada - Walmart": "JD CANADA - WALMART",
+    "Lateral TJ": "LATERAL TJ"
     
 
 
