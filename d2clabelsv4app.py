@@ -214,8 +214,10 @@ def generate_fnsku_labels_from_excel(df):
 LOCATION_MAP = {
     "JD NJ : JD NJ - AMZ FBA": "JD NJ - AMZ FBA",
     "JD Canada : JD Canada - AMZ FBA": "JD CANADA - AMZ FBA",
-    "JD UK : JD UK - AMAZON FBA": "JD UK - AMZ FBA",
-    "JD AU : JD AU - AMAZON FBA": "JD AU - AMZ FBA",
+    "JD UK : JD UK - AMZ FBA": "JD UK - AMZ FBA",
+    "JD AU : JD AU - AMZ FBA": "JD AU - AMZ FBA",
+    "AMAZON FBA CA": "AMAZON FBA CANADA",
+    "Amazon FBA UK": "AMAZON FBA UK",
     "JD - Belk": "JD CA - BELK",
     "JD - Showcase": "JD CANADA - SHOWCASE",
     "JD Canada": "JD CANADA",
